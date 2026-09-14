@@ -1,0 +1,47 @@
+# ───────────────────────────────────────────────────────────────
+#  Archivos que NUNCA deben llegar al repositorio.
+# ───────────────────────────────────────────────────────────────
+
+# ─── Secretos (lo más importante) ──────────────────────────────
+# Cualquier archivo .env queda fuera de git: contiene contraseñas
+# de base de datos y la clave de firma de sesiones.
+.env
+.env.*
+# Excepción: la plantilla SÍ se versiona, porque no lleva valores reales.
+!.env.example
+
+# ─── Dependencias ──────────────────────────────────────────────
+node_modules
+
+# ─── Artefactos de compilación de Next.js ──────────────────────
+.next
+out
+build
+dist
+next-env.d.ts
+
+# ─── Archivos subidos por los usuarios en tiempo de ejecución ──
+# Las imágenes que sube el administrador son datos, no código.
+/var/uploads
+
+# ─── Registros y volcados ──────────────────────────────────────
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ─── Caché de herramientas ─────────────────────────────────────
+.eslintcache
+*.tsbuildinfo
+coverage
+.vitest
+
+# ─── Sistema operativo y editores ──────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.swp

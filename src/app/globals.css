@@ -1,0 +1,302 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   NOCTURNE · Sistema de diseño oscuro
+   ───────────────────────────────────────────────────────────── */
+
+@theme {
+  --color-ink: #0b0a08;
+  --color-coal: #131110;
+  --color-panel: #1a1713;
+  --color-line: #2b251d;
+  --color-ember: #e8a33d;
+  --color-flare: #f5c877;
+  --color-brass: #a4682a;
+  --color-cream: #f2ede3;
+  --color-fog: #958d7c;
+
+  --font-display: var(--font-instrument), Georgia, serif;
+  --font-sans: var(--font-grotesk), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --animate-marquee: marquee 32s linear infinite;
+  --animate-spin-slow: spin 14s linear infinite;
+}
+
+/* ─── Propiedades registradas (StarBorder, conic animations) ── */
+
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ─── Base ─────────────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-cream);
+  font-family: var(--font-sans);
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-ember);
+  color: var(--color-ink);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body.cursor-custom,
+  body.cursor-custom a,
+  body.cursor-custom button,
+  body.cursor-custom input,
+  body.cursor-custom select,
+  body.cursor-custom textarea,
+  body.cursor-custom label,
+  body.cursor-custom summary {
+    cursor: none;
+  }
+}
+
+/* ─── Keyframes ─────────────────────────────────────────────── */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes shine {
+  to {
+    background-position: -200% center;
+  }
+}
+
+@keyframes star-rotate {
+  to {
+    --angle: 360deg;
+  }
+}
+
+@keyframes aurora-drift-1 {
+  0%,
+  100% {
+    transform: translate3d(-12%, -6%, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(8%, 10%, 0) scale(1.25) rotate(24deg);
+  }
+}
+
+@keyframes aurora-drift-2 {
+  0%,
+  100% {
+    transform: translate3d(10%, 6%, 0) scale(1.1);
+  }
+  50% {
+    transform: translate3d(-8%, -10%, 0) scale(0.9);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ─── Utilidades de autor ───────────────────────────────────── */
+
+@utility text-shimmer {
+  background: linear-gradient(
+    110deg,
+    var(--color-cream) 35%,
+    var(--color-flare) 50%,
+    var(--color-cream) 65%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shine 4s linear infinite;
+}
+
+@utility glass {
+  background: color-mix(in srgb, var(--color-panel) 62%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid color-mix(in srgb, var(--color-cream) 8%, transparent);
+}
+
+@utility star-border {
+  background: conic-gradient(
+    from var(--angle),
+    transparent 0%,
+    transparent 68%,
+    var(--color-ember) 82%,
+    var(--color-flare) 88%,
+    transparent 100%
+  );
+  animation: star-rotate 3.4s linear infinite;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  pointer-events: none;
+  z-index: 60;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-shift 9s steps(6) infinite;
+}
+
+@keyframes grain-shift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  20% {
+    transform: translate(-4%, 3%);
+  }
+  40% {
+    transform: translate(3%, -5%);
+  }
+  60% {
+    transform: translate(-5%, -2%);
+  }
+  80% {
+    transform: translate(4%, 4%);
+  }
+}
+
+.vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 90% at 50% 20%,
+    transparent 40%,
+    color-mix(in srgb, var(--color-ink) 82%, transparent) 100%
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACCESIBILIDAD
+   ═══════════════════════════════════════════════════════════════ */
+
+/*
+  Enlace "Saltar al contenido".
+  Es el primer elemento tabulable de la página. Permanece oculto fuera
+  de la pantalla hasta que recibe el foco, momento en el que aparece.
+  Quien navega con teclado o lector de pantalla puede así saltarse la
+  navegación repetida en cada página (criterio WCAG 2.4.1).
+*/
+.salto-contenido {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 200;
+  padding: 0.75rem 1.25rem;
+  background: var(--color-ember);
+  color: var(--color-ink);
+  font-weight: 600;
+  border-radius: 0 0 0.5rem 0;
+}
+
+/* Al tabular hasta él, vuelve a la esquina superior izquierda. */
+.salto-contenido:focus {
+  left: 0;
+}
+
+/*
+  Indicador de foco visible y uniforme.
+  Varios componentes usaban `outline-none` sin poner nada a cambio, de
+  modo que al navegar con el tabulador no se veía dónde estabas. Aquí
+  se restaura un anillo claro para TODO elemento que recibe el foco por
+  teclado (`:focus-visible` no se dispara al hacer clic con el ratón,
+  así que el diseño no cambia para quien usa ratón).
+*/
+:focus-visible {
+  outline: 2px solid var(--color-ember);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PREFERENCIA "REDUCIR MOVIMIENTO"
+
+   Red de seguridad global. Los componentes ya consultan la
+   preferencia en JavaScript, pero esta regla cubre también las
+   animaciones puramente CSS (el grano de la imagen, transiciones
+   sueltas, `scroll-behavior`) sin tener que revisarlas una a una.
+
+   No se ponen en 0s los tiempos porque algunos componentes esperan al
+   evento `transitionend`: con 0s ese evento no siempre se dispara y la
+   interfaz se quedaría bloqueada. 0,01 ms es imperceptible y sí lo
+   dispara.
+   ═══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* El grano animado del fondo es un parpadeo constante: se congela. */
+  .grain::before {
+    animation: none !important;
+  }
+}
