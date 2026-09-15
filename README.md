@@ -27,6 +27,7 @@ Edítalo y ejecuta `npm run build && npm run start`.
 | Documento | Contenido |
 |---|---|
 | [`HISTORIAL.md`](./HISTORIAL.md) | Registro cronológico de cada mejora: qué cambió, por qué y qué riesgos quedan |
+| [`docs/ACTUALIZAR.md`](./docs/ACTUALIZAR.md) | Cómo traer los cambios nuevos sin descargar ni descomprimir nada |
 | [`docs/AUDITORIA.md`](./docs/AUDITORIA.md) | Diagnóstico inicial: problemas clasificados por gravedad |
 | [`docs/INFORME-FINAL.md`](./docs/INFORME-FINAL.md) | Informe de la intervención, secciones A–J |
 
