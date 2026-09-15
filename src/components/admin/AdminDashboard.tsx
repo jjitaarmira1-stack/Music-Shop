@@ -494,34 +494,120 @@ export default function AdminDashboard({
                     className="w-full rounded-2xl border border-line bg-ink/60 px-4 py-3 text-sm outline-none focus:border-ember/60"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.25em] text-fog">
-                      Categoría
-                    </label>
-                    <select
-                      value={form.category}
-                      onChange={(e) =>
-                        // Al cambiar de categoría se VACÍA la subcategoría:
-                        // las de la anterior ya no son válidas y el
-                        // servidor rechazaría la pareja incoherente.
-                        setForm({
-                          ...form,
-                          category: e.target.value,
-                          subcategory: "",
-                        })
-                      }
-                      className="w-full rounded-2xl border border-line bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60"
-                    >
-                      {Object.entries(CATEGORY_LABEL)
-                        .filter(([id]) => id !== "todos")
-                        .map(([id, label]) => (
-                          <option key={id} value={id}>
-                            {label}
+                {/*
+                  ─── CLASIFICACIÓN EN DOS PASOS ──────────────────────
+                  Primero el grupo, después el estante concreto. Se
+                  agrupan en un bloque con borde propio para que se lea
+                  como UNA decisión en dos pasos y no como dos campos
+                  sueltos perdidos entre el precio y el stock.
+
+                  La asignación es MANUAL a propósito: la decide quien
+                  da de alta el producto, no un automatismo que acabaría
+                  colocando un bajo entre las guitarras.
+                */}
+                <div className="rounded-2xl border border-line/70 bg-ink/30 p-4">
+                  <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.25em] text-fog">
+                    Clasificación en el catálogo
+                  </p>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Paso 1 · familia */}
+                    <div>
+                      <label
+                        htmlFor="campo-categoria"
+                        className="mb-2 block text-xs text-fog"
+                      >
+                        <span className="text-ember">1.</span> Familia
+                      </label>
+                      <select
+                        id="campo-categoria"
+                        value={form.category}
+                        onChange={(e) =>
+                          // Al cambiar de familia se VACÍA la subcategoría:
+                          // las de la anterior ya no son válidas y el
+                          // servidor rechazaría la pareja incoherente.
+                          setForm({
+                            ...form,
+                            category: e.target.value,
+                            subcategory: "",
+                          })
+                        }
+                        className="w-full rounded-2xl border border-line bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60"
+                      >
+                        {Object.entries(CATEGORY_LABEL)
+                          .filter(([id]) => id !== "todos")
+                          .map(([id, label]) => (
+                            <option key={id} value={id}>
+                              {label}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* Paso 2 · estante dentro de esa familia */}
+                    <div>
+                      <label
+                        htmlFor="campo-subcategoria"
+                        className="mb-2 block text-xs text-fog"
+                      >
+                        <span className="text-ember">2.</span> Tipo dentro de{" "}
+                        <span className="text-cream">
+                          {CATEGORY_LABEL[form.category] ?? form.category}
+                        </span>
+                      </label>
+                      <select
+                        id="campo-subcategoria"
+                        value={form.subcategory}
+                        onChange={(e) =>
+                          setForm({ ...form, subcategory: e.target.value })
+                        }
+                        className={cn(
+                          "w-full rounded-2xl border bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60",
+                          // Sin clasificar se marca en ámbar tenue: es
+                          // válido, pero conviene que llame la atención.
+                          form.subcategory
+                            ? "border-line"
+                            : "border-ember/40 text-fog",
+                        )}
+                      >
+                        {/* Cadena vacía = sin clasificar. Se guarda como NULL. */}
+                        <option value="">Sin clasificar</option>
+                        {subcategoriasDisponibles.map((sub) => (
+                          <option key={sub.id} value={sub.id}>
+                            {sub.label}
                           </option>
                         ))}
-                    </select>
+                      </select>
+                    </div>
                   </div>
+
+                  {/*
+                    Vista previa de dónde acabará el producto. Confirma
+                    la decisión antes de guardar, que es justo cuando
+                    sirve de algo.
+                  */}
+                  <p className="mt-3 text-xs text-fog">
+                    Se guardará en{" "}
+                    <span className="text-cream">
+                      {CATEGORY_LABEL[form.category] ?? form.category}
+                    </span>
+                    {form.subcategory ? (
+                      <>
+                        {" › "}
+                        <span className="text-ember">
+                          {ETIQUETA_SUBCATEGORIA[form.subcategory]}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-fog/70">
+                        {" "}
+                        (sin tipo: aparecerá sólo al filtrar por la familia)
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.25em] text-fog">
                       Precio (€)
@@ -537,41 +623,6 @@ export default function AdminDashboard({
                     />
                   </div>
                 </div>
-
-                {/*
-                  Subcategoría: depende de la categoría elegida arriba.
-                  Sólo se muestra si esa categoría tiene subcategorías,
-                  y las opciones se recalculan solas al cambiarla.
-                */}
-                {subcategoriasDisponibles.length > 0 && (
-                  <div>
-                    <label
-                      htmlFor="campo-subcategoria"
-                      className="mb-2 block font-mono text-[10px] uppercase tracking-[0.25em] text-fog"
-                    >
-                      Subcategoría{" "}
-                      <span className="normal-case tracking-normal text-fog/60">
-                        (opcional)
-                      </span>
-                    </label>
-                    <select
-                      id="campo-subcategoria"
-                      value={form.subcategory}
-                      onChange={(e) =>
-                        setForm({ ...form, subcategory: e.target.value })
-                      }
-                      className="w-full rounded-2xl border border-line bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60"
-                    >
-                      {/* Cadena vacía = sin clasificar. Se guarda como NULL. */}
-                      <option value="">Sin especificar</option>
-                      {subcategoriasDisponibles.map((sub) => (
-                        <option key={sub.id} value={sub.id}>
-                          {sub.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -599,9 +650,19 @@ export default function AdminDashboard({
                         }
                         className="w-full rounded-2xl border border-line bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60"
                       >
-                        {imageOptions.map((src) => (
+                        {/*
+                          `.filter(Boolean)` es una red de seguridad: si la
+                          API devolviera algún elemento vacío o con otro
+                          nombre de campo, antes se caía toda la pantalla
+                          de administración con «Cannot read properties of
+                          undefined». Es preferible mostrar una opción de
+                          menos que dejar al administrador sin panel.
+                        */}
+                        {imageOptions.filter(Boolean).map((src) => (
                           <option key={src} value={src}>
-                            {src.replace("/img/products/", "").replace("/img/", "★ ")}
+                            {src
+                              .replace("/img/products/", "")
+                              .replace("/img/", "★ ")}
                           </option>
                         ))}
                         {!imageOptions.includes(form.image) && (
@@ -611,7 +672,10 @@ export default function AdminDashboard({
                       <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-line bg-ink">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={form.image.replace(
+                          // `?? ""` por el mismo motivo: si el formulario
+                          // se quedara sin imagen, el src vacío deja un
+                          // hueco pero no rompe el render.
+                          src={(form.image ?? "").replace(
                             "/img/products/",
                             "/media/products/",
                           )}

@@ -17,12 +17,27 @@ export const dynamic = "force-dynamic";
 /** Extensiones que se listan en la galería. */
 const EXTENSIONES_GALERIA = [".jpg", ".jpeg", ".png", ".webp", ".avif"];
 
-/** Estructura de una imagen en la galería. */
+/**
+ * Estructura de una imagen en la galería.
+ *
+ * OJO CON LOS NOMBRES DE LOS CAMPOS: van en inglés (`name`, `path`…)
+ * aunque el resto del proyecto esté en castellano. No es un descuido.
+ *
+ * Son el CONTRATO PÚBLICO de la API, y el POST de este mismo endpoint
+ * ya devolvía `name`/`path`. Al traducir sólo el GET a `nombre`/`ruta`
+ * quedaron dos idiomas en la misma API: el cliente leía `img.path`,
+ * recibía `undefined` y la interfaz de administración se rompía con
+ * «Cannot read properties of undefined (reading 'replace')».
+ *
+ * Regla para lo sucesivo: los nombres de campo que cruzan la red se
+ * mantienen en inglés y no se traducen; los comentarios, mensajes de
+ * error y nombres internos, en castellano.
+ */
 export interface ImagenGaleria {
-  nombre: string;
-  ruta: string; // Ruta web para mostrarla.
-  carpeta: string; // "subidas" o "catálogo".
-  tamanoKb: number;
+  name: string;
+  path: string; // Ruta web para mostrarla.
+  folder: string; // "subidas" o "catálogo".
+  sizeKb: number;
   editable: boolean; // Si se puede borrar (las del catálogo no).
 }
 
@@ -57,10 +72,10 @@ async function listarDirectorio(
     const info = await fs.stat(path.join(directorio, entrada.name));
 
     imagenes.push({
-      nombre: entrada.name,
-      ruta: `${prefijoWeb}${entrada.name}`,
-      carpeta: etiquetaCarpeta,
-      tamanoKb: Math.max(1, Math.ceil(info.size / 1024)),
+      name: entrada.name,
+      path: `${prefijoWeb}${entrada.name}`,
+      folder: etiquetaCarpeta,
+      sizeKb: Math.max(1, Math.ceil(info.size / 1024)),
       editable,
     });
   }

@@ -136,7 +136,11 @@ export function useGestionCatalogo({
       reintentos: 1,
     })
       .then((datos) =>
-        sincronizarImagenes((datos.images ?? []).map((img) => img.path)),
+        // `.filter(Boolean)` descarta rutas vacías antes de que lleguen
+        // al <select>, que es donde reventaba la pantalla.
+        sincronizarImagenes(
+          (datos.images ?? []).map((img) => img.path).filter(Boolean),
+        ),
       )
       .catch(() => {
         // Sin galería seguimos con las imágenes por defecto: el panel

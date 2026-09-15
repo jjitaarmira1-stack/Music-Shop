@@ -23,6 +23,78 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-15 · Error en el panel y clasificación guiada en dos pasos
+
+**Commit:** pendiente · **Tipo:** 🐛 Corrección · 🎯 Uso
+
+### El error
+
+El panel de administración se caía al abrirse:
+
+```
+Uncaught TypeError: Cannot read properties of undefined (reading 'replace')
+    at AdminDashboard.tsx:604  →  src.replace("/img/products/", "")
+```
+
+### Por qué pasaba
+
+Un fallo mío de la auditoría, de los que no salta hasta que alguien usa la
+pantalla. Al traducir el código al castellano cambié también **los nombres de
+los campos que devuelve la API**, pero sólo en una de las dos respuestas del
+mismo endpoint:
+
+| | Devolvía | El cliente leía |
+|---|---|---|
+| `GET /api/uploads` | `nombre`, `ruta`, `carpeta` | `name`, `path`, `folder` |
+| `POST /api/uploads` | `name`, `path` | `name`, `path` ✔ |
+
+El `GET` quedó en castellano y el `POST` en inglés: dos idiomas en la misma
+API. El cliente pedía `img.path`, recibía `undefined`, y al llamar `.replace()`
+sobre eso se caía **toda la pantalla de administración**, no sólo el selector.
+
+### Qué se cambió
+
+- **`src/app/api/uploads/route.ts`** — el `GET` vuelve a `name`/`path`/`folder`/
+  `sizeKb`, igual que el `POST`.
+- **`AdminDashboard.tsx` y `useGestionCatalogo.ts`** — `.filter(Boolean)` y
+  `?? ""` como red de seguridad: si la API devolviera algo raro, se pierde una
+  opción del desplegable en lugar de dejar al administrador sin panel.
+
+**Regla que queda fijada:** los nombres de campo que cruzan la red se quedan en
+inglés y no se traducen. Los comentarios, mensajes de error y nombres internos,
+en castellano. Traducir un contrato público rompe a quien lo consume.
+
+### Clasificación guiada en dos pasos
+
+Los dos desplegables estaban sueltos entre el precio y el stock. Ahora forman
+un bloque propio que se lee como **una decisión en dos pasos**:
+
+```
+┌─ Clasificación en el catálogo ─────────────────────┐
+│  1. Familia          2. Tipo dentro de Cuerdas     │
+│  [ Cuerdas    ▾ ]    [ Bajos              ▾ ]      │
+│                                                     │
+│  Se guardará en Cuerdas › Bajos                    │
+└─────────────────────────────────────────────────────┘
+```
+
+- La etiqueta del segundo paso **nombra la familia elegida** («Tipo dentro de
+  Cuerdas»), para que se entienda que depende de la primera.
+- Una línea de confirmación muestra **dónde acabará el producto** antes de
+  guardar, que es justo cuando sirve de algo.
+- Sin clasificar, el campo se marca en ámbar tenue: es válido, pero se ve.
+- La asignación es **manual**, decidida por quien da de alta el producto. Nada
+  de adivinar por el nombre: un automatismo acabaría poniendo un bajo entre las
+  guitarras, y corregirlo después cuesta más que elegirlo bien una vez.
+
+### Comprobado
+
+Panel abre sin errores · `GET /api/uploads` devuelve `name`/`path` · alta con
+«Cuerdas › Bajos» → se guarda y aparece al filtrar · `tsc` limpio · lint sin
+avisos nuevos.
+
+---
+
 ## 2026-09-15 · Subcategorías en el catálogo
 
 **Commit:** pendiente · **Tipo:** 🎯 Uso · 🏗️ Arquitectura
