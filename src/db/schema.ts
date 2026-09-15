@@ -112,6 +112,12 @@ export const products = pgTable(
     description: text("description").notNull(), // Texto largo de la ficha.
     category: text("category").notNull(), // Categoría del catálogo.
 
+    // Subcategoría dentro de la categoría (p. ej. "bajos" en "cuerdas").
+    // Es OPCIONAL a propósito: los productos que ya existían no tienen
+    // ninguna asignada, y obligar a rellenarla habría roto el catálogo
+    // actual. Los nuevos sí pueden clasificarse con más detalle.
+    subcategory: text("subcategory"),
+
     // Precio en CÉNTIMOS (entero). Guardar dinero en decimales de coma
     // flotante provoca errores de redondeo: 0.1 + 0.2 no es 0.3.
     priceCents: integer("price_cents").notNull(),
@@ -133,6 +139,12 @@ export const products = pgTable(
   (t) => [
     // Índice para filtrar por categoría (lo hace el catálogo).
     index("products_category_idx").on(t.category),
+
+    // Índice COMPUESTO para el filtro de dos niveles.
+    // El orden importa: (categoría, subcategoría) sirve tanto para
+    // filtrar sólo por categoría como por las dos a la vez. Al revés
+    // no funcionaría para el primer caso.
+    index("products_cat_subcat_idx").on(t.category, t.subcategory),
 
     // Índice PARCIAL: sólo indexa las filas destacadas, que son pocas.
     // Ocupa mucho menos que un índice completo sobre un booleano.
@@ -158,6 +170,34 @@ export const products = pgTable(
     check(
       "products_category_check",
       sql`${t.category} in ('cuerdas', 'teclas', 'percusion', 'viento', 'estudio')`,
+    ),
+
+    // La subcategoría debe pertenecer a SU categoría.
+    //
+    // Sin esta comprobación se podría guardar un producto de categoría
+    // "viento" con subcategoría "bajos": un dato incoherente que no
+    // aparecería en ningún filtro y sería muy difícil de rastrear.
+    //
+    // La aplicación ya lo valida con `esSubcategoriaValida()`, pero
+    // esto es la red de seguridad: si algún día se escribe en la tabla
+    // desde un script o desde la consola, la regla se sigue cumpliendo.
+    //
+    // `is null` primero, porque el campo es opcional.
+    check(
+      "products_subcategory_check",
+      sql`${t.subcategory} is null or (
+        (${t.category} = 'cuerdas' and ${t.subcategory} in (
+          'guitarras-electricas', 'guitarras-acusticas', 'bajos',
+          'violines', 'violonchelos', 'arpas-otros'))
+        or (${t.category} = 'teclas' and ${t.subcategory} in (
+          'pianos-digitales', 'sintetizadores', 'organos', 'controladores-midi'))
+        or (${t.category} = 'percusion' and ${t.subcategory} in (
+          'baterias-acusticas', 'baterias-electronicas', 'platillos', 'percusion-manual'))
+        or (${t.category} = 'viento' and ${t.subcategory} in (
+          'madera', 'metal', 'armonicas'))
+        or (${t.category} = 'estudio' and ${t.subcategory} in (
+          'microfonos', 'monitores', 'interfaces', 'accesorios'))
+      )`,
     ),
   ],
 );

@@ -104,6 +104,14 @@ export async function buscarProductos(
     condiciones.push(eq(products.category, filtros.category));
   }
 
+  // Filtro por subcategoría ("todas" significa no filtrar).
+  // Se combina con el anterior mediante AND, así que pedir
+  // categoría=cuerdas y subcategoría=bajos devuelve sólo los bajos.
+  // El índice compuesto (category, subcategory) cubre justo este caso.
+  if (filtros.subcategory && filtros.subcategory !== "todas") {
+    condiciones.push(eq(products.subcategory, filtros.subcategory));
+  }
+
   // Búsqueda por texto en el nombre.
   if (filtros.q) {
     // Escapamos los comodines de LIKE (% y _) para que una búsqueda de
@@ -198,6 +206,8 @@ export async function crearProducto(datos: DatosCrearProducto) {
     tagline: datos.tagline,
     description: datos.description,
     category: datos.category,
+    // `?? null` porque la columna admite nulos: es un campo opcional.
+    subcategory: datos.subcategory ?? null,
     priceCents: datos.priceCents,
     stock: datos.stock,
     image: datos.image ?? IMAGEN_POR_DEFECTO,
@@ -229,6 +239,9 @@ export async function actualizarProducto(
   if (datos.tagline !== undefined) cambios.tagline = datos.tagline;
   if (datos.description !== undefined) cambios.description = datos.description;
   if (datos.category !== undefined) cambios.category = datos.category;
+  // Se comprueba contra `undefined` y no con un `if` a secas para poder
+  // distinguir «no se envió el campo» de «se envió null para borrarlo».
+  if (datos.subcategory !== undefined) cambios.subcategory = datos.subcategory;
   if (datos.priceCents !== undefined) cambios.priceCents = datos.priceCents;
   if (datos.stock !== undefined) cambios.stock = datos.stock;
   if (datos.image !== undefined) cambios.image = datos.image;

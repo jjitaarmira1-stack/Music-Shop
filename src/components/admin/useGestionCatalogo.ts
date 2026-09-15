@@ -41,6 +41,8 @@ export interface EstadoFormulario {
   name: string;
   tagline: string;
   category: string;
+  /** Subcategoría. Cadena vacía = sin especificar (se guarda como NULL). */
+  subcategory: string;
   description: string;
   price: string;
   stock: string;
@@ -53,6 +55,7 @@ export const FORMULARIO_VACIO: EstadoFormulario = {
   name: "",
   tagline: "",
   category: "cuerdas",
+  subcategory: "",
   description: "",
   price: "",
   stock: "5",
@@ -189,6 +192,9 @@ export function useGestionCatalogo({
       name: producto.name,
       tagline: producto.tagline,
       category: producto.category,
+      // La base puede devolver NULL: en el formulario se representa
+      // como cadena vacía, que es lo que entiende un <select>.
+      subcategory: producto.subcategory ?? "",
       description: producto.description,
       // Los precios se guardan en céntimos (enteros) para no arrastrar
       // los errores de redondeo de los decimales; aquí se pasan a euros
@@ -237,6 +243,9 @@ export function useGestionCatalogo({
         name: formulario.name,
         tagline: formulario.tagline,
         category: formulario.category,
+        // Cadena vacía -> null: así el servidor la guarda como «sin
+        // clasificar» en lugar de rechazarla por no ser un id válido.
+        subcategory: formulario.subcategory || null,
         description: formulario.description,
         // `Math.round` evita los clásicos 12,99 € → 1298,9999 céntimos.
         priceCents: Math.round(precioNumerico * 100),

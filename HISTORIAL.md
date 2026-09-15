@@ -18,7 +18,86 @@ bucear en el historial de git.
 | ♿ Accesibilidad | Mejora el uso con teclado o lector de pantalla |
 | 🏗️ Arquitectura | Reordena el código sin cambiar lo que hace |
 | 📄 Documentación | Solo afecta a textos y documentos |
+| 🎯 Uso | Mejora la experiencia de quien usa la web |
 | ⚙️ Configuración | Entorno, dependencias, herramientas |
+
+---
+
+## 2026-09-15 · Subcategorías en el catálogo
+
+**Commit:** pendiente · **Tipo:** 🎯 Uso · 🏗️ Arquitectura
+
+Primera mejora de **uso** (hasta ahora todo había sido seguridad).
+
+### Qué se pidió
+
+El catálogo solo tenía cinco grupos — Cuerdas, Teclas, Percusión, Viento,
+Estudio — y dentro de cada uno estaba todo mezclado. Se pidió un segundo nivel:
+Cuerdas › Guitarras, Bajos, Violines…
+
+### Cómo quedó la clasificación
+
+| Categoría | Subcategorías |
+|---|---|
+| **Cuerdas** | Guitarras eléctricas · Guitarras acústicas · Bajos · Violines y violas · Violonchelos y contrabajos · Arpas y otros |
+| **Teclas** | Pianos digitales · Sintetizadores · Órganos · Controladores MIDI |
+| **Percusión** | Baterías acústicas · Baterías electrónicas · Platillos · Percusión manual |
+| **Viento** | Viento madera · Viento metal · Armónicas y otros |
+| **Estudio** | Micrófonos · Monitores y auriculares · Interfaces de audio · Accesorios |
+
+21 subcategorías en total.
+
+### Decisiones de diseño
+
+**Una sola fuente de verdad.** Toda la clasificación vive en
+`src/lib/taxonomia.ts`. El filtro del catálogo, el formulario del panel, los
+esquemas de Zod y la restricción de PostgreSQL beben de ahí. Añadir «ukeleles»
+mañana es tocar un archivo, no cinco.
+
+**El campo es opcional.** Un producto puede quedarse sin subcategoría. Si se
+hubiera hecho obligatorio, los 8 productos que ya existían habrían dejado de
+validar y el panel se habría bloqueado al editarlos.
+
+**La subcategoría se reinicia al cambiar de categoría.** Si vienes de
+Cuerdas › Bajos y pulsas Viento, quedaría el filtro «viento + bajos», que no
+existe: verías una lista vacía sin entender por qué. Pasa igual en el
+formulario del panel.
+
+**Integridad en la base de datos, no solo en la aplicación.** Una restricción
+`CHECK` impide guardar «viento + bajos» aunque alguien escriba directamente
+por consola. Verificado: PostgreSQL lo rechaza, acepta las parejas correctas y
+acepta `NULL`.
+
+### Archivos afectados
+
+| Archivo | Cambio |
+|---|---|
+| `src/lib/taxonomia.ts` | **Nuevo.** El árbol completo y las funciones de consulta |
+| `src/db/schema.ts` | Columna `subcategory`, índice compuesto `(category, subcategory)` y `CHECK` de coherencia |
+| `src/lib/validaciones.ts` | Esquema de subcategoría y validación cruzada con `superRefine` |
+| `src/lib/utils.ts` | Reexporta desde la taxonomía; las importaciones antiguas siguen funcionando |
+| `src/servicios/productos.ts` | Filtro por subcategoría y guardado del campo |
+| `src/app/api/products/route.ts` | Acepta `?subcategory=` |
+| `src/components/sections/Catalog.tsx` | Segunda fila de filtros, más discreta que la principal |
+| `src/components/admin/AdminDashboard.tsx` | Selector dependiente y migas «Cuerdas › Bajos» en la lista |
+| `src/components/admin/useGestionCatalogo.ts` | El campo en el estado del formulario |
+| `src/db/seed.ts` | Los 8 productos de ejemplo ya vienen clasificados |
+
+### Comprobado
+
+Filtro de dos niveles (Cuerdas devuelve 4, Cuerdas › Bajos devuelve 1) ·
+subcategoría inventada en la URL → `400` · crear producto con «viento + bajos»
+→ rechazado con mensaje claro · PostgreSQL rechaza la pareja incoherente ·
+acepta `NULL` · `tsc` sin errores · lint sin avisos nuevos.
+
+### Cosas a tener en cuenta
+
+- **Hay que ejecutar `npx drizzle-kit push`** tras actualizar: la tabla cambió.
+- Los productos que ya tuvieras creados quedan **sin subcategoría** hasta que
+  los edites. Siguen apareciendo con normalidad al filtrar por categoría.
+- El filtro vive en el estado del componente, **no en la URL**. Por ahora no se
+  puede compartir un enlace a «Cuerdas › Bajos» ni funciona el botón atrás del
+  navegador. Es la primera mejora pendiente de esta serie.
 
 ---
 

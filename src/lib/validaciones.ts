@@ -1,4 +1,9 @@
 import { z } from "zod"; // Librería de validación de esquemas.
+import {
+  IDS_CATEGORIAS,
+  IDS_SUBCATEGORIAS,
+  esSubcategoriaValida,
+} from "@/lib/taxonomia";
 
 // ═══════════════════════════════════════════════════════════════
 //  ESQUEMAS DE VALIDACIÓN COMPARTIDOS
@@ -71,21 +76,29 @@ export const esquemaNombre = z
 
 /**
  * Categorías válidas del catálogo.
- * Antes `category` era texto libre: se podía crear un producto con una
- * categoría inexistente que luego no aparecía en ningún filtro.
+ *
+ * Se derivan de `src/lib/taxonomia.ts`, que es la fuente única. Antes
+ * la lista estaba escrita a mano aquí y había que acordarse de tocar
+ * varios archivos a la vez.
  */
-export const CATEGORIAS_VALIDAS = [
-  "cuerdas",
-  "teclas",
-  "percusion",
-  "viento",
-  "estudio",
-] as const;
+export const CATEGORIAS_VALIDAS = IDS_CATEGORIAS as [string, ...string[]];
 
 /** Esquema que sólo acepta una de las categorías anteriores. */
 export const esquemaCategoria = z.enum(CATEGORIAS_VALIDAS, {
   message: "Selecciona una categoría válida del catálogo",
 });
+
+/**
+ * Esquema de la subcategoría, por sí sola.
+ *
+ * Sólo comprueba que el identificador EXISTE. Que además corresponda a
+ * la categoría elegida se valida más abajo, en el esquema completo del
+ * producto, porque ahí sí se conocen los dos campos a la vez.
+ */
+export const esquemaSubcategoria = z.enum(
+  IDS_SUBCATEGORIAS as [string, ...string[]],
+  { message: "Selecciona una subcategoría válida" },
+);
 
 /** Estados por los que puede pasar un pedido. */
 export const ESTADOS_PEDIDO = [
@@ -157,8 +170,12 @@ export const esquemaRegistro = z.object({
 
 // ─── Productos ─────────────────────────────────────────────────
 
-/** Campos necesarios para crear un instrumento (sólo administradores). */
-export const esquemaCrearProducto = z.object({
+/**
+ * Campos del instrumento, sin la validación cruzada todavía.
+ * Se extrae aparte porque `.partial()` (el de actualizar) necesita el
+ * objeto plano: no se puede aplicar sobre un esquema ya refinado.
+ */
+const camposProducto = z.object({
   name: z.string().trim().min(2, "El nombre es obligatorio").max(120),
   tagline: z.string().trim().min(2, "El eslogan es obligatorio").max(160),
   description: z
@@ -167,6 +184,9 @@ export const esquemaCrearProducto = z.object({
     .min(10, "La descripción debe tener al menos 10 caracteres")
     .max(4000, "La descripción es demasiado larga"),
   category: esquemaCategoria,
+  // Subcategoría opcional: los productos antiguos no tienen ninguna.
+  // `nullable` permite además BORRARLA enviando null desde el panel.
+  subcategory: esquemaSubcategoria.nullable().optional(),
   priceCents: esquemaPrecioCentimos,
   // Los siguientes son opcionales y tienen valor por defecto.
   stock: esquemaStock.default(0),
@@ -176,6 +196,35 @@ export const esquemaCrearProducto = z.object({
 });
 
 /**
+ * Comprueba que la subcategoría pertenece a la categoría elegida.
+ *
+ * Va como `superRefine` y no dentro de cada campo porque necesita ver
+ * los DOS valores a la vez. Marca el error en `subcategory`, que es el
+ * campo que el administrador tiene que corregir.
+ */
+function validarParejaCategoria(
+  datos: { category?: string; subcategory?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  // Si falta alguno de los dos no hay pareja que comprobar. En el PATCH
+  // es normal: se puede estar cambiando sólo el precio.
+  if (!datos.category || !datos.subcategory) return;
+
+  if (!esSubcategoriaValida(datos.category, datos.subcategory)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["subcategory"],
+      message: "Esa subcategoría no pertenece a la categoría elegida",
+    });
+  }
+}
+
+/** Campos necesarios para crear un instrumento (sólo administradores). */
+export const esquemaCrearProducto = camposProducto.superRefine(
+  validarParejaCategoria,
+);
+
+/**
  * Campos que se pueden modificar de un instrumento.
  * `.partial()` los hace todos opcionales; `.refine()` obliga a enviar
  * al menos uno, para que un PATCH vacío no se considere válido.
@@ -183,17 +232,27 @@ export const esquemaCrearProducto = z.object({
  * Esto además cierra el *mass assignment*: aunque el cliente mande
  * `id`, `createdAt` o `slug`, Zod los descarta porque no están aquí.
  */
-export const esquemaActualizarProducto = esquemaCrearProducto
+export const esquemaActualizarProducto = camposProducto
   .partial()
   .refine(
     (datos) => Object.keys(datos).length > 0,
     "Debes enviar al menos un campo para actualizar",
-  );
+  )
+  // La pareja categoría/subcategoría se comprueba también al editar.
+  .superRefine(validarParejaCategoria);
 
 /** Parámetros de búsqueda admitidos en `GET /api/products`. */
 export const esquemaFiltrosProducto = z.object({
   // "todos" es un valor especial que significa "sin filtrar".
   category: z.enum([...CATEGORIAS_VALIDAS, "todos"]).optional(),
+  // Subcategoría: segundo nivel del filtro. "todas" = sin filtrar.
+  subcategory: z
+    .enum(["todas", ...IDS_SUBCATEGORIAS] as [string, ...string[]], {
+      // Sin este mensaje, Zod suelta la lista entera de identificadores
+      // válidos, que es ruido técnico para quien lo lee.
+      message: "Subcategoría no reconocida",
+    })
+    .optional(),
   // Texto de búsqueda, acotado para evitar consultas desmedidas.
   q: z.string().trim().max(100, "La búsqueda es demasiado larga").optional(),
   // "1" activa el filtro de destacados.

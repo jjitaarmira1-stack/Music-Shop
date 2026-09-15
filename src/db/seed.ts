@@ -32,6 +32,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Cuerpo de caoba maciza con acabado satinado negro absoluto. Pastillas humbucker de bobinado manual, diapasón de ébano y un sustain que parece no terminar nunca. Construida para escenarios donde la luz apenas existe.",
     category: "cuerdas",
+    subcategory: "guitarras-electricas", // Segundo nivel de clasificación.
     priceCents: 249900,
     stock: 7,
     image: "/img/products/guitarra-electrica.jpg",
@@ -50,6 +51,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Tapa de pícea maciza y aros de nogal americano. Voz cálida, profunda y con una proyección que llena la habitación sin esfuerzo. Cada unidad se ajusta a mano durante seis horas antes de salir del taller.",
     category: "cuerdas",
+    subcategory: "guitarras-acusticas", // Segundo nivel de clasificación.
     priceCents: 118900,
     stock: 12,
     image: "/img/products/guitarra-acustica.jpg",
@@ -68,6 +70,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Cuatro osciladores de voltaje real, filtro ladder de 24 dB y una matriz de modulación sin menús: todo está bajo tus dedos. El bruto analógico que define una época, con la estabilidad que exige un estudio moderno.",
     category: "teclas",
+    subcategory: "sintetizadores", // Segundo nivel de clasificación.
     priceCents: 184900,
     stock: 5,
     image: "/img/products/sintetizador.jpg",
@@ -86,6 +89,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Cascos de abedul báltico de 7 láminas y herrajes macizos. Bombo de 22″ con pegada seca, timbales que cantan y platillos de bronce B20 martilleados a mano. Lista para girar desde la primera caja.",
     category: "percusion",
+    subcategory: "baterias-acusticas", // Segundo nivel de clasificación.
     priceCents: 209900,
     stock: 4,
     image: "/img/products/bateria.jpg",
@@ -104,6 +108,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Arce flameado de bosques centenarios y barniz al aceite aplicado en doce capas. Un instrumento de proyección noble y armónicos cristalinos, graduado a mano por un único lutier de principio a fin.",
     category: "cuerdas",
+    subcategory: "violines", // Segundo nivel de clasificación.
     priceCents: 345000,
     stock: 3,
     image: "/img/products/violin.jpg",
@@ -122,6 +127,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Latón dorado con grabado artesanal y llaves de tacto nacarado. Registro grave aterciopelado, agudos que cortan sin estridencia. Afinación revisada instrumento a instrumento por nuestro atelier de viento.",
     category: "viento",
+    subcategory: "madera", // Segundo nivel de clasificación.
     priceCents: 167500,
     stock: 6,
     image: "/img/products/saxofon.jpg",
@@ -140,6 +146,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Grave redondo, definido y siempre en su sitio. Cuerpo de aliso, mástil slim de perfil C y electrónica activa de 3 bandas para esculpir desde dub hasta fusión sin tocar el ampli.",
     category: "cuerdas",
+    subcategory: "bajos", // Segundo nivel de clasificación.
     priceCents: 132000,
     stock: 9,
     image: "/img/products/bajo.jpg",
@@ -158,6 +165,7 @@ const CATALOGO_INICIAL: NewProduct[] = [
     description:
       "Cápsula de gran diafragma con baño de oro y electrónica discreta clase A. Capta el aire entre las notas: voces íntimas, guitarras con cuerpo y room drums con una sola toma.",
     category: "estudio",
+    subcategory: "microfonos", // Segundo nivel de clasificación.
     priceCents: 48900,
     stock: 15,
     image: "/img/products/microfono.jpg",

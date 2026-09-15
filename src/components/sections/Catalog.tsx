@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Search, SlidersHorizontal } from "lucide-react";
 import type { Product } from "@/db/schema";
 import { CATEGORIES, cn } from "@/lib/utils";
+import { obtenerSubcategorias } from "@/lib/taxonomia";
 import SplitText from "@/components/bits/SplitText";
 import Reveal from "@/components/bits/Reveal";
 import ProductCard from "@/components/sections/ProductCard";
@@ -18,9 +19,27 @@ export default function Catalog({
 }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [category, setCategory] = useState("todos");
+  // Segundo nivel del filtro. "todas" = no filtrar dentro de la categoría.
+  const [subcategory, setSubcategory] = useState("todas");
   const [query, setQuery] = useState("");
   const [isPending, startTransition] = useTransition();
   const firstRun = useRef(true);
+  // Subcategorías de la categoría activa. Si es "todos", no hay
+  // ninguna: no tendría sentido mezclar «bajos» con «platillos».
+  const subcategorias = obtenerSubcategorias(category);
+
+  /**
+   * Cambia de categoría y reinicia la subcategoría.
+   *
+   * Reiniciarla es imprescindible: si vienes de Cuerdas > Bajos y
+   * pulsas Viento, quedaría el filtro «viento + bajos», que no existe
+   * y devolvería una lista vacía sin explicación aparente.
+   */
+  const cambiarCategoria = (nuevaCategoria: string) => {
+    setCategory(nuevaCategoria);
+    setSubcategory("todas");
+  };
+
   // Mensaje de error de la búsqueda. Antes el `catch` se tragaba
   // cualquier fallo en silencio: si la API caía, el usuario veía la
   // lista antigua y creía que no había novedades.
@@ -35,6 +54,7 @@ export default function Catalog({
     const timer = setTimeout(async () => {
       const params = new URLSearchParams();
       if (category !== "todos") params.set("category", category);
+      if (subcategory !== "todas") params.set("subcategory", subcategory);
       if (query.trim()) params.set("q", query.trim());
       try {
         // `peticionJson` añade tiempo máximo de espera y reintentos,
@@ -60,7 +80,7 @@ export default function Catalog({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [category, query]);
+  }, [category, subcategory, query]);
 
   return (
     <section id="catalogo" className="relative border-t border-line bg-coal/40">
@@ -99,7 +119,7 @@ export default function Catalog({
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setCategory(cat.id)}
+                onClick={() => cambiarCategoria(cat.id)}
                 className={cn(
                   "relative rounded-full border px-5 py-2 text-sm transition-all duration-300",
                   category === cat.id
@@ -118,6 +138,68 @@ export default function Catalog({
             ))}
           </div>
         </Reveal>
+
+        {/*
+          ─── Segundo nivel: subcategorías ───────────────────────────
+          Sólo aparece cuando hay una categoría concreta seleccionada.
+          Se diseña deliberadamente MÁS DISCRETO que la fila de arriba
+          (píldoras pequeñas, borde tenue, sin el resplandor) para que
+          la jerarquía se entienda de un vistazo: primero el grupo,
+          después el detalle.
+        */}
+        <AnimatePresence initial={false}>
+          {subcategorias.length > 0 && (
+            <motion.div
+              // La animación de altura evita que el catálogo «salte»
+              // bruscamente al cambiar de categoría.
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div className="mb-12 flex flex-wrap items-center gap-2 pl-6">
+                {/* Guion vertical que sugiere «esto cuelga de arriba». */}
+                <span aria-hidden className="mr-1 h-4 w-px bg-line" />
+
+                {/* Opción para quitar el filtro de detalle. */}
+                <button
+                  type="button"
+                  onClick={() => setSubcategory("todas")}
+                  aria-pressed={subcategory === "todas"}
+                  className={cn(
+                    "rounded-full border px-4 py-1.5 text-xs transition-colors duration-300",
+                    subcategory === "todas"
+                      ? "border-ember/60 bg-ember/10 text-ember"
+                      : "border-line/60 text-fog hover:border-ember/40 hover:text-cream",
+                  )}
+                >
+                  Todas
+                </button>
+
+                {subcategorias.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => setSubcategory(sub.id)}
+                    // `aria-pressed` comunica al lector de pantalla si
+                    // el filtro está activo; el color por sí solo no
+                    // transmite esa información.
+                    aria-pressed={subcategory === sub.id}
+                    className={cn(
+                      "rounded-full border px-4 py-1.5 text-xs transition-colors duration-300",
+                      subcategory === sub.id
+                        ? "border-ember/60 bg-ember/10 text-ember"
+                        : "border-line/60 text-fog hover:border-ember/40 hover:text-cream",
+                    )}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/*
           Aviso de error de red. `role="status"` hace que el lector de
@@ -173,8 +255,12 @@ export default function Catalog({
             <button
               type="button"
               onClick={() => {
+                // Se limpian los TRES filtros: si sólo se reiniciara la
+                // categoría, podría quedar una subcategoría activa y la
+                // lista seguiría vacía sin motivo aparente.
                 setQuery("");
                 setCategory("todos");
+                setSubcategory("todas");
               }}
               className="mt-2 rounded-full border border-ember/50 bg-ember/10 px-6 py-2.5 text-sm text-ember transition-colors hover:bg-ember hover:text-ink"
             >

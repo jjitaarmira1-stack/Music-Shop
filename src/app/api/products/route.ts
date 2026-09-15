@@ -23,6 +23,7 @@ export async function GET(peticion: Request) {
     // defecto (página 1, 24 por página) y los topes máximos.
     const filtros = esquemaFiltrosProducto.parse({
       category: searchParams.get("category") ?? undefined,
+      subcategory: searchParams.get("subcategory") ?? undefined,
       q: searchParams.get("q") ?? undefined,
       featured: searchParams.get("featured") ?? undefined,
       page: searchParams.get("page") ?? undefined,

@@ -24,6 +24,7 @@ import GalleryManager from "@/components/admin/GalleryManager";
 import { toast } from "sonner";
 import type { Order, OrderStatus, Product } from "@/db/schema";
 import { CATEGORY_LABEL, cn, formatDate, formatPrice } from "@/lib/utils";
+import { obtenerSubcategorias, ETIQUETA_SUBCATEGORIA } from "@/lib/taxonomia";
 import CountUp from "@/components/bits/CountUp";
 import SpotlightCard from "@/components/bits/SpotlightCard";
 import StarBorder from "@/components/bits/StarBorder";
@@ -114,6 +115,11 @@ export default function AdminDashboard({
 
   // Referencia al <input type="file"> oculto del formulario.
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  // Subcategorías de la categoría seleccionada en el formulario.
+  // Se recalcula en cada render: es una búsqueda en un array de cinco
+  // elementos, no merece memorizarse.
+  const subcategoriasDisponibles = obtenerSubcategorias(form.category);
 
   const statCards = useMemo(
     () => [
@@ -295,7 +301,16 @@ export default function AdminDashboard({
                       {product.name}
                     </p>
                     <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fog">
-                      {CATEGORY_LABEL[product.category] ?? product.category} ·
+                      {CATEGORY_LABEL[product.category] ?? product.category}
+                      {/* Migas de pan: «Cuerdas › Bajos». */}
+                      {product.subcategory && (
+                        <>
+                          {" › "}
+                          {ETIQUETA_SUBCATEGORIA[product.subcategory] ??
+                            product.subcategory}
+                        </>
+                      )}{" "}
+                      ·
                       stock {product.stock}
                     </p>
                   </div>
@@ -486,7 +501,16 @@ export default function AdminDashboard({
                     </label>
                     <select
                       value={form.category}
-                      onChange={(e) => setForm({ ...form, category: e.target.value })}
+                      onChange={(e) =>
+                        // Al cambiar de categoría se VACÍA la subcategoría:
+                        // las de la anterior ya no son válidas y el
+                        // servidor rechazaría la pareja incoherente.
+                        setForm({
+                          ...form,
+                          category: e.target.value,
+                          subcategory: "",
+                        })
+                      }
                       className="w-full rounded-2xl border border-line bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60"
                     >
                       {Object.entries(CATEGORY_LABEL)
@@ -513,6 +537,42 @@ export default function AdminDashboard({
                     />
                   </div>
                 </div>
+
+                {/*
+                  Subcategoría: depende de la categoría elegida arriba.
+                  Sólo se muestra si esa categoría tiene subcategorías,
+                  y las opciones se recalculan solas al cambiarla.
+                */}
+                {subcategoriasDisponibles.length > 0 && (
+                  <div>
+                    <label
+                      htmlFor="campo-subcategoria"
+                      className="mb-2 block font-mono text-[10px] uppercase tracking-[0.25em] text-fog"
+                    >
+                      Subcategoría{" "}
+                      <span className="normal-case tracking-normal text-fog/60">
+                        (opcional)
+                      </span>
+                    </label>
+                    <select
+                      id="campo-subcategoria"
+                      value={form.subcategory}
+                      onChange={(e) =>
+                        setForm({ ...form, subcategory: e.target.value })
+                      }
+                      className="w-full rounded-2xl border border-line bg-ink px-4 py-3 text-sm outline-none focus:border-ember/60"
+                    >
+                      {/* Cadena vacía = sin clasificar. Se guarda como NULL. */}
+                      <option value="">Sin especificar</option>
+                      {subcategoriasDisponibles.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          {sub.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-2 block font-mono text-[10px] uppercase tracking-[0.25em] text-fog">

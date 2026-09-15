@@ -21,17 +21,17 @@ export function formatDate(date: Date | string) {
   }).format(new Date(date));
 }
 
-export const CATEGORIES = [
-  { id: "todos", label: "Todos" },
-  { id: "cuerdas", label: "Cuerdas" },
-  { id: "teclas", label: "Teclas" },
-  { id: "percusion", label: "Percusión" },
-  { id: "viento", label: "Viento" },
-  { id: "estudio", label: "Estudio" },
-] as const;
+// ─── Categorías ──────────────────────────────────────────────────
+//
+// La clasificación vive ahora en `src/lib/taxonomia.ts`, que también
+// describe las subcategorías. Aquí sólo se reexporta con los nombres
+// que ya usaban los componentes, para no tener que tocarlos todos.
 
-export type CategoryId = (typeof CATEGORIES)[number]["id"];
+export {
+  CATEGORIAS_CON_TODOS as CATEGORIES,
+  ETIQUETA_CATEGORIA as CATEGORY_LABEL,
+  ETIQUETA_SUBCATEGORIA as SUBCATEGORY_LABEL,
+  obtenerSubcategorias,
+} from "@/lib/taxonomia";
 
-export const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
-  CATEGORIES.map((c) => [c.id, c.label]),
-);
+export type CategoryId = string;
