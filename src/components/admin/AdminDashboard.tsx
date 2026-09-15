@@ -18,11 +18,15 @@ import {
   Store,
   Trash2,
   Users,
+  UsersRound,
   X,
 } from "lucide-react";
 import GalleryManager from "@/components/admin/GalleryManager";
+import GraficasResumen from "@/components/admin/GraficasResumen";
+import GestionUsuarios from "@/components/admin/GestionUsuarios";
 import { toast } from "sonner";
 import type { Order, OrderStatus, Product } from "@/db/schema";
+import type { DatosGraficas } from "@/servicios/productos";
 import { CATEGORY_LABEL, cn, formatDate, formatPrice } from "@/lib/utils";
 import { obtenerSubcategorias, ETIQUETA_SUBCATEGORIA } from "@/lib/taxonomia";
 import CountUp from "@/components/bits/CountUp";
@@ -47,9 +51,13 @@ interface Stats {
 
 interface Props {
   stats: Stats;
+  /** Series y desgloses ya agregados en el servidor, para las gráficas. */
+  charts: DatosGraficas;
   initialProducts: Product[];
   initialOrders: Order[];
   adminName: string;
+  /** Correo del administrador: sirve para marcar su propia fila. */
+  adminEmail: string;
 }
 
 const TABS = [
@@ -57,6 +65,7 @@ const TABS = [
   { id: "productos", label: "Instrumentos", icon: Package },
   { id: "pedidos", label: "Pedidos", icon: Boxes },
   { id: "galeria", label: "Galería", icon: Images },
+  { id: "usuarios", label: "Cuentas", icon: UsersRound },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -78,9 +87,11 @@ type FormState = EstadoFormulario;
 
 export default function AdminDashboard({
   stats,
+  charts,
   initialProducts,
   initialOrders,
   adminName,
+  adminEmail,
 }: Props) {
   // Pestaña activa del panel.
   const [tab, setTab] = useState<TabId>("resumen");
@@ -226,6 +237,10 @@ export default function AdminDashboard({
               </motion.div>
             ))}
           </div>
+
+          {/* Gráficas: evolución de ventas, estados, catálogo y stock.
+              Se dibujan con SVG nativo, sin librerías externas. */}
+          <GraficasResumen datos={charts} />
 
           <h2 className="mt-14 font-display text-2xl">Pedidos recientes</h2>
           {stats.recentOrders.length === 0 ? (
@@ -437,6 +452,20 @@ export default function AdminDashboard({
           className="mt-10"
         >
           <GalleryManager onChange={syncImageOptions} />
+        </motion.div>
+      )}
+
+      {/* ─── CUENTAS ─── */}
+      {tab === "usuarios" && (
+        <motion.div
+          key="usuarios"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          {/* La lista se pide al montar, no en el servidor: así el
+              panel abre igual de rápido aunque haya muchas cuentas. */}
+          <GestionUsuarios emailAdminActual={adminEmail} />
         </motion.div>
       )}
 

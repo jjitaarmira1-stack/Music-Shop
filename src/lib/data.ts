@@ -21,6 +21,7 @@ import {
   obtenerProductoPorSlug,
   obtenerProductosRelacionados,
   obtenerEstadisticas,
+  obtenerDatosGraficas,
 } from "@/servicios/productos";
 import {
   listarPedidosDeUsuario,
@@ -84,4 +85,9 @@ export async function getOrdersForUser(usuarioId: string) {
 /** Estadísticas del panel de administración. */
 export async function getAdminStats() {
   return obtenerEstadisticas();
+}
+
+/** Datos agregados que alimentan las gráficas del panel. */
+export async function getAdminCharts() {
+  return obtenerDatosGraficas();
 }

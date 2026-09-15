@@ -78,6 +78,28 @@ export const users = pgTable(
     // Rol que determina los permisos.
     role: text("role").$type<Role>().notNull().default("customer"),
 
+    /**
+     * Momento a partir del cual las sesiones de este usuario son válidas.
+     *
+     * Las sesiones de esta aplicación son AUTOCONTENIDAS: van firmadas
+     * dentro de la cookie y el servidor no guarda una lista de sesiones
+     * activas. Eso las hace rápidas, pero tiene una consecuencia: si un
+     * administrador baja a alguien de rol o le restablece la contraseña,
+     * la cookie que esa persona ya tiene en el navegador SEGUIRÍA siendo
+     * válida hasta caducar (7 días), con el rol antiguo dentro.
+     *
+     * Esta columna lo resuelve sin montar una tabla de sesiones: al
+     * cambiar el rol o la contraseña se pone la fecha actual, y toda
+     * cookie emitida ANTES de ese instante se rechaza al validarla.
+     * Es un "cierre de sesión en todos los dispositivos" que cuesta
+     * una sola columna.
+     */
+    sessionsValidFrom: timestamp("sessions_valid_from", {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+
     // Fecha de alta, con zona horaria para evitar ambigüedades.
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -281,4 +303,4 @@ export type ProductoPublico = Product;
  * `Omit` garantiza, EN TIEMPO DE COMPILACIÓN, que el hash de la
  * contraseña no pueda colarse en una respuesta por descuido.
  */
-export type UsuarioPublico = Omit<User, "passwordHash">;
+export type UsuarioPublico = Omit<User, "passwordHash" | "sessionsValidFrom">;

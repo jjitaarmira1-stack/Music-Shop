@@ -181,7 +181,7 @@ export function codificarSesion(usuario: UsuarioSesion): string {
  * Devuelve `null` ante cualquier anomalía: firma inválida, caducado,
  * formato incorrecto o campos que no cuadran.
  */
-export function decodificarSesion(token: string | undefined): UsuarioSesion | null {
+export function decodificarSesion(token: string | undefined): (UsuarioSesion & { iat: number }) | null {
   if (!token) return null; // No hay cookie.
 
   // El token debe tener exactamente dos partes separadas por un punto.
@@ -224,12 +224,15 @@ export function decodificarSesion(token: string | undefined): UsuarioSesion | nu
       return null;
     }
 
-    // Devolvemos SOLO los campos públicos, nunca la carga completa.
+    // Devolvemos SOLO los campos públicos, más `iat`, que hace falta
+    // para comprobar si la cuenta se modificó después de emitirse la
+    // cookie (ver `obtenerSesion`). Nunca la carga completa.
     return {
       uid: datos.uid,
       name: datos.name,
       email: datos.email,
       role: datos.role,
+      iat: typeof datos.iat === "number" ? datos.iat : 0,
     };
   } catch {
     return null; // JSON corrupto.
@@ -242,7 +245,45 @@ export function decodificarSesion(token: string | undefined): UsuarioSesion | nu
  */
 export async function obtenerSesion(): Promise<UsuarioSesion | null> {
   const almacen = await cookies(); // Cookies de la petición en curso.
-  return decodificarSesion(almacen.get(NOMBRE_COOKIE)?.value);
+  const carga = decodificarSesion(almacen.get(NOMBRE_COOKIE)?.value);
+
+  // Sin cookie, o con firma/caducidad inválidas: no hay sesión.
+  if (!carga) return null;
+
+  // ─── Comprobación de revocación ────────────────────────────────
+  // La firma dice que la cookie es auténtica, pero no que siga siendo
+  // vigente: si un administrador cambió el rol o restableció la
+  // contraseña DESPUÉS de emitirse, hay que rechazarla. Es una
+  // consulta por clave primaria (índice único), del orden de
+  // microsegundos, y es el precio de poder expulsar a alguien al
+  // instante en lugar de esperar 7 días.
+  //
+  // El import es dinámico a propósito: `servicios/usuarios` importa
+  // este mismo módulo para hashear, y un import estático crearía una
+  // dependencia circular.
+  try {
+    const { sesionSigueVigente } = await import("@/servicios/usuarios");
+    if (!(await sesionSigueVigente(carga.uid, carga.iat))) {
+      registro.seguridad("auth", "Sesión revocada por cambio en la cuenta", {
+        uid: carga.uid,
+      });
+      return null;
+    }
+  } catch (error) {
+    // Si la base de datos no responde, se deniega en lugar de conceder
+    // (fail-closed). Ante la duda, nunca se da por buena una sesión.
+    registro.error("auth", "No se pudo validar la vigencia de la sesión", error);
+    return null;
+  }
+
+  // Sesión auténtica y vigente. Se devuelven sólo los campos públicos:
+  // `iat` es control interno y no debe circular por la aplicación.
+  return {
+    uid: carga.uid,
+    name: carga.name,
+    email: carga.email,
+    role: carga.role,
+  };
 }
 
 /**

@@ -326,3 +326,142 @@ export async function obtenerEstadisticas() {
     recentOrders: pedidosRecientes,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  DATOS PARA LAS GRÁFICAS DEL PANEL
+//
+//  Todo el cálculo se hace en PostgreSQL, no en JavaScript. Traerse
+//  los pedidos enteros para agruparlos aquí funcionaría con 50 filas
+//  y se caería con 50.000: la base de datos agrupa con índices y
+//  devuelve una decena de filas ya resumidas.
+// ═══════════════════════════════════════════════════════════════
+
+/** Un punto de la gráfica de evolución diaria. */
+export interface PuntoDiario {
+  /** Día en formato AAAA-MM-DD. */
+  fecha: string;
+  /** Pedidos creados ese día. */
+  pedidos: number;
+  /** Ingresos de ese día, en céntimos. */
+  ingresosCents: number;
+}
+
+/** Un tramo de un gráfico de reparto (estados, categorías…). */
+export interface TramoReparto {
+  /** Etiqueta del tramo. */
+  etiqueta: string;
+  /** Número de elementos. */
+  total: number;
+}
+
+/** Conjunto completo de datos que alimentan las gráficas. */
+export interface DatosGraficas {
+  /** Serie de los últimos 30 días, sin huecos. */
+  ventasDiarias: PuntoDiario[];
+  /** Reparto de pedidos por estado. */
+  pedidosPorEstado: TramoReparto[];
+  /** Reparto de productos por familia del catálogo. */
+  productosPorCategoria: TramoReparto[];
+  /** Los cinco productos con menos existencias. */
+  stockCritico: { nombre: string; stock: number }[];
+  /** Los cinco productos más vendidos por unidades. */
+  masVendidos: { nombre: string; unidades: number }[];
+}
+
+/**
+ * Reúne todos los datos de las gráficas en una sola tanda de consultas
+ * paralelas. Se llama una vez por carga del panel.
+ */
+export async function obtenerDatosGraficas(): Promise<DatosGraficas> {
+  const { orders } = await import("@/db/schema"); // Import diferido.
+
+  const [serieCruda, porEstado, porCategoria, stockBajo, ventasPorProducto] =
+    await Promise.all([
+      // ─── 1. Ventas de los últimos 30 días ──────────────────────
+      // `date_trunc` agrupa por día; el WHERE aprovecha el índice de
+      // fecha para no recorrer la tabla entera.
+      db
+        .select({
+          fecha: sql<string>`to_char(date_trunc('day', ${orders.createdAt}), 'YYYY-MM-DD')`,
+          pedidos: sql<number>`count(*)::int`,
+          ingresosCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
+        })
+        .from(orders)
+        .where(
+          sql`${orders.createdAt} >= now() - interval '30 days' and ${orders.status} <> 'cancelado'`,
+        )
+        .groupBy(sql`date_trunc('day', ${orders.createdAt})`)
+        .orderBy(sql`date_trunc('day', ${orders.createdAt})`),
+
+      // ─── 2. Pedidos por estado ─────────────────────────────────
+      db
+        .select({
+          etiqueta: orders.status,
+          total: sql<number>`count(*)::int`,
+        })
+        .from(orders)
+        .groupBy(orders.status),
+
+      // ─── 3. Productos por familia ──────────────────────────────
+      db
+        .select({
+          etiqueta: products.category,
+          total: sql<number>`count(*)::int`,
+        })
+        .from(products)
+        .groupBy(products.category)
+        .orderBy(sql`count(*) desc`),
+
+      // ─── 4. Stock crítico ──────────────────────────────────────
+      // Los cinco con menos unidades: es la alerta de reposición.
+      db
+        .select({ nombre: products.name, stock: products.stock })
+        .from(products)
+        .orderBy(products.stock)
+        .limit(5),
+
+      // ─── 5. Más vendidos ───────────────────────────────────────
+      // Las líneas del pedido viven en una columna JSONB, así que hay
+      // que expandirlas con `jsonb_array_elements` antes de sumar.
+      db.execute(sql`
+        select
+          linea->>'name' as nombre,
+          sum((linea->>'quantity')::int)::int as unidades
+        from ${orders}, jsonb_array_elements(${orders.items}) as linea
+        where ${orders.status} <> 'cancelado'
+        group by linea->>'name'
+        order by unidades desc
+        limit 5
+      `),
+    ]);
+
+  // ─── Relleno de días sin ventas ──────────────────────────────
+  // La consulta sólo devuelve los días CON pedidos. Si se dibujara tal
+  // cual, una semana sin ventas se vería como una línea plana falsa
+  // uniendo dos puntos distantes. Se completan los 30 días con ceros.
+  const porFecha = new Map(serieCruda.map((f) => [f.fecha, f]));
+  const ventasDiarias: PuntoDiario[] = [];
+
+  for (let i = 29; i >= 0; i--) {
+    const dia = new Date();
+    dia.setDate(dia.getDate() - i); // Retrocedemos i días.
+    const clave = dia.toISOString().slice(0, 10); // AAAA-MM-DD.
+
+    // Si ese día hubo pedidos usamos la fila; si no, un punto a cero.
+    ventasDiarias.push(
+      porFecha.get(clave) ?? { fecha: clave, pedidos: 0, ingresosCents: 0 },
+    );
+  }
+
+  return {
+    ventasDiarias,
+    pedidosPorEstado: porEstado,
+    productosPorCategoria: porCategoria,
+    stockCritico: stockBajo,
+    // `db.execute` devuelve filas sin tipar: se normalizan aquí.
+    masVendidos: (ventasPorProducto.rows ?? []).map((f) => ({
+      nombre: String((f as Record<string, unknown>).nombre ?? "—"),
+      unidades: Number((f as Record<string, unknown>).unidades ?? 0),
+    })),
+  };
+}

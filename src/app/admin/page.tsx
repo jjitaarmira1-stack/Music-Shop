@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { obtenerSesion as getSession } from "@/lib/auth";
-import { getAdminStats, getAllOrders, getProducts } from "@/lib/data";
+import {
+  getAdminCharts,
+  getAdminStats,
+  getAllOrders,
+  getProducts,
+} from "@/lib/data";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +21,11 @@ export default async function AdminPage() {
   if (!session) redirect("/login?next=/admin");
   if (session.role !== "admin") redirect("/");
 
-  const [stats, products, orders] = await Promise.all([
+  // Las cuatro consultas van en paralelo: el panel tarda lo que la
+  // más lenta, no la suma de todas.
+  const [stats, charts, products, orders] = await Promise.all([
     getAdminStats(),
+    getAdminCharts(), // Series y desgloses para las gráficas.
     getProducts(),
     getAllOrders(),
   ]);
@@ -25,9 +33,11 @@ export default async function AdminPage() {
   return (
     <AdminDashboard
       stats={stats}
+      charts={charts}
       initialProducts={products}
       initialOrders={orders}
       adminName={session.name}
+      adminEmail={session.email}
     />
   );
 }

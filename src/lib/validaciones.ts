@@ -298,6 +298,21 @@ export const esquemaActualizarPedido = z.object({
   status: esquemaEstadoPedido,
 });
 
+/**
+ * Cambio de rol de una cuenta (sólo administradores).
+ *
+ * Lista cerrada de dos valores: cualquier otra cosa que llegue por la
+ * red se rechaza con un 422 antes de tocar la base de datos. Es la
+ * defensa contra la asignación masiva de campos (mass assignment):
+ * aunque el cliente mande `{ role: "superadmin", passwordHash: "..." }`,
+ * de aquí sólo sale `role`.
+ */
+export const esquemaCambiarRol = z.object({
+  role: z.enum(["admin", "customer"], {
+    message: "El rol debe ser 'admin' o 'customer'",
+  }),
+});
+
 // ─── Tipos derivados ───────────────────────────────────────────
 // Se infieren del esquema para que el tipo y la validación nunca
 // se desincronicen: si cambia el esquema, cambia el tipo.
@@ -308,3 +323,4 @@ export type DatosCrearProducto = z.infer<typeof esquemaCrearProducto>;
 export type DatosActualizarProducto = z.infer<typeof esquemaActualizarProducto>;
 export type DatosCrearPedido = z.infer<typeof esquemaCrearPedido>;
 export type FiltrosProducto = z.infer<typeof esquemaFiltrosProducto>;
+export type DatosCambiarRol = z.infer<typeof esquemaCambiarRol>;

@@ -23,6 +23,153 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-15 · Gráficas en el panel y gestión de cuentas
+
+**Commit:** pendiente · **Tipo:** 🎯 Uso · 🔒 Seguridad
+
+### Qué se pidió
+
+Dos cosas: ver el recuento de los datos importantes en gráficas dentro del
+panel de administración, y poder gestionar las cuentas de las personas
+usuarias (restablecer su contraseña de forma segura y cambiarles el rol).
+
+### 1. Gráficas del resumen
+
+En la pestaña **Resumen** hay ahora un bloque «Cómo va la tienda» con cuatro
+paneles:
+
+| Panel | Qué enseña |
+|---|---|
+| Ingresos por día | Área con los últimos 30 días, sin contar cancelados |
+| Pedidos por estado | Barras con el reparto entre pendiente, pagado, enviado, entregado y cancelado |
+| Catálogo por familia | Cuántos instrumentos hay en cada una de las cinco familias |
+| Reposición y éxitos | Los 5 productos con menos existencias y los 5 más vendidos |
+
+**Sin librería de gráficas.** Recharts o Chart.js habrían añadido entre 100 y
+200 KB al paquete que descarga el navegador en cada visita al panel. Para
+cuatro gráficas sencillas no compensa: se dibujan con SVG nativo, que pesa
+cero, se adapta solo a cualquier pantalla y usa los colores de la marca.
+
+**Los cálculos se hacen en PostgreSQL, no en JavaScript.** Traerse todos los
+pedidos al servidor para agruparlos allí funciona con 50 filas y se cae con
+50.000. Las consultas usan `group by` y `date_trunc`, y devuelven una decena
+de filas ya resumidas. Las cinco consultas van en paralelo.
+
+**Detalle de los días vacíos:** la consulta solo devuelve los días en los que
+hubo pedidos. Si se dibujara tal cual, una semana sin ventas se vería como una
+línea recta engañosa entre dos puntos lejanos. Se rellenan los 30 días con
+ceros antes de dibujar.
+
+### 2. Pestaña «Cuentas»
+
+Nueva pestaña en el panel con la lista de personas registradas: nombre,
+correo, rol, fecha de alta y número de pedidos. Hay buscador por nombre o
+correo. Dos acciones por fila:
+
+- **Cambiar el rol** (cliente ↔ administrador)
+- **Restablecer la contraseña**
+
+Ambas piden confirmación en un diálogo que explica exactamente qué va a
+ocurrir, no un «¿estás seguro?» genérico.
+
+**Cómo se restablece la contraseña.** La genera el servidor al azar (18 bytes
+aleatorios) y se muestra **una sola vez** en pantalla, con un botón para
+copiarla. No se guarda en claro en ningún sitio: en la base de datos solo
+queda su hash Argon2id, y en los registros no aparece nunca.
+
+¿Por qué no la escribe el administrador? Porque tendería a poner algo
+memorizable y, sobre todo, porque la conocería de antemano y podría entrar en
+la cuenta ajena sin dejar rastro. Generada al azar y mostrada una vez, quien
+la recibe puede cambiarla y el administrador no se la queda.
+
+Lo ideal de verdad sería mandar un enlace de un solo uso por correo, pero eso
+exige un servicio de email que el proyecto todavía no tiene. Esta es la mejor
+opción disponible sin añadir infraestructura.
+
+### 3. El problema de seguridad que había que resolver antes
+
+Las sesiones de esta aplicación son **autocontenidas**: los datos de la
+persona (incluido su rol) viajan firmados dentro de la cookie y el servidor no
+guarda ninguna lista de sesiones activas. Es rápido, pero tenía una
+consecuencia grave en cuanto se añade la gestión de cuentas:
+
+> Si un administrador bajaba de rol a alguien, esa persona **seguiría
+> entrando al panel durante 7 días**, porque su cookie ya emitida llevaba
+> dentro el rol antiguo y era perfectamente válida. Lo mismo al restablecer
+> una contraseña: si la cuenta estaba comprometida, el intruso se quedaba
+> dentro con su cookie.
+
+**Solución:** una columna nueva en `users`, `sessions_valid_from`. Al cambiar
+un rol o una contraseña se pone la fecha actual, y cualquier cookie emitida
+antes de ese instante se rechaza al validarla. Es un «cerrar sesión en todos
+los dispositivos» que cuesta una sola columna, sin montar una tabla de
+sesiones.
+
+El coste es una consulta por clave primaria en cada petición autenticada
+(microsegundos, resuelta por índice único). Si la base de datos no responde,
+se **deniega** la sesión en lugar de concederla: ante la duda, nunca se da
+por buena.
+
+### 4. Protecciones contra errores irreparables
+
+| Situación | Qué pasa |
+|---|---|
+| Quitarte a ti mismo el rol de administrador | Bloqueado (409). Es el error más fácil de cometer y te deja fuera del panel |
+| Degradar a la única cuenta de administración | Bloqueado (409). La tienda se quedaría sin nadie que la gestione |
+| Mandar un rol inventado (`superadmin`) | Rechazado (422) antes de tocar la base de datos |
+| Mandar campos de más (`passwordHash`) | Se ignoran: del cuerpo solo se lee `role` |
+| Petición desde otro sitio web | Rechazada (403) por la comprobación de origen |
+| Sin sesión / siendo cliente | 401 / 403 |
+
+En la interfaz, los botones bloqueados se ven desactivados y explican en su
+`title` **por qué** no se pueden pulsar, que si no resulta desconcertante.
+
+### Archivos tocados
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/db/schema.ts` | Columna `sessions_valid_from` en `users`; excluida del tipo público |
+| `src/lib/auth.ts` | `obtenerSesion` comprueba que la sesión no haya sido revocada |
+| `src/servicios/usuarios.ts` | `listarUsuarios`, `cambiarRolUsuario`, `restablecerContrasenaUsuario`, `sesionSigueVigente` |
+| `src/servicios/productos.ts` | `obtenerDatosGraficas` con las cinco consultas agregadas |
+| `src/lib/validaciones.ts` | `esquemaCambiarRol` (lista cerrada de dos valores) |
+| `src/lib/data.ts` | `getAdminCharts` |
+| `src/app/admin/page.tsx` | Carga los datos de gráficas y pasa el correo del administrador |
+| `src/app/api/users/route.ts` | **Nuevo.** Listado de cuentas |
+| `src/app/api/users/[id]/rol/route.ts` | **Nuevo.** Cambio de rol |
+| `src/app/api/users/[id]/contrasena/route.ts` | **Nuevo.** Restablecer contraseña |
+| `src/components/admin/GraficasResumen.tsx` | **Nuevo.** Las cuatro gráficas en SVG |
+| `src/components/admin/GestionUsuarios.tsx` | **Nuevo.** Tabla de cuentas y diálogos |
+| `src/components/admin/AdminDashboard.tsx` | Pestaña «Cuentas» y bloque de gráficas |
+
+### Al actualizar
+
+Esta entrega **cambia la base de datos**. Después de bajar los cambios hay que
+ejecutar:
+
+```
+npx drizzle-kit push
+```
+
+La columna nueva tiene valor por defecto, así que las cuentas existentes no se
+ven afectadas y nadie pierde su sesión al aplicar el cambio.
+
+### Cómo comprobarlo
+
+1. Entra en `/admin`. En **Resumen** deben verse las cuatro gráficas.
+2. Ve a la pestaña **Cuentas**: aparece la lista con el buscador.
+3. Tu propia fila lleva la etiqueta «Tú» y tiene el cambio de rol desactivado.
+4. Restablece la contraseña de una cuenta de prueba: sale el diálogo con la
+   contraseña, y hay que marcar «Ya la he copiado» para poder cerrarlo.
+5. Con la contraseña antigua ya no se puede entrar; con la nueva sí.
+6. Si esa cuenta tenía la sesión abierta, queda cerrada al instante.
+
+### Dependencias
+
+Ninguna nueva. Las gráficas son SVG escrito a mano.
+
+---
+
 ## 2026-09-15 · Error en el panel y clasificación guiada en dos pasos
 
 **Commit:** pendiente · **Tipo:** 🐛 Corrección · 🎯 Uso
