@@ -45,3 +45,9 @@ Thumbs.db
 !.vscode/extensions.json
 .idea
 *.swp
+
+# ─── Paquetes ZIP de distribución ──────────────────────────────
+# Se generan bajo demanda y no deben versionarse: duplican el código
+# y engordan el historial de forma permanente. Para distribuir una
+# versión, usar GitHub Releases.
+*.zip
