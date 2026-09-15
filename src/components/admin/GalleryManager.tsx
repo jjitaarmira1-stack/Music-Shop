@@ -234,18 +234,12 @@ export default function GalleryManager({
                 <div className="aspect-[4/3] w-full overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={image.path.replace(
-                      "/img/products/",
-                      "/media/products/",
-                    )}
-                    onError={(e) => {
-                      // Si el alias no responde (build antiguo), vuelve a /img
-                      const el = e.currentTarget;
-                      if (!el.dataset.fallback) {
-                        el.dataset.fallback = "1";
-                        el.src = image.path;
-                      }
-                    }}
+                    // La ruta llega ya correcta desde /api/uploads:
+                    // las subidas con `/media/products/…` y las del
+                    // catálogo con `/img/products/…`. No se reescribe
+                    // una por otra: son carpetas distintas y hacerlo
+                    // producía 404.
+                    src={image.path}
                     alt={image.name}
                     loading="lazy"
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"

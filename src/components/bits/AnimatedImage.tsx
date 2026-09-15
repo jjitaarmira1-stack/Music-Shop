@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import Image from "next/image";
 import { motion, useScroll, useTransform, useSpring } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -36,13 +36,19 @@ export default function AnimatedImage({
   const rawY = useTransform(scrollYProgress, [0, 1], [parallax, -parallax]);
   const y = useSpring(rawY, { stiffness: 90, damping: 22, mass: 0.6 });
 
-  // Las imágenes del catálogo se sirven preferentemente por /media/... , el
-  // handler que lee disco al vuelo; si el build no lo tuviera, cae a /img/...
-  const [imgSrc, setImgSrc] = useState(() =>
-    src.startsWith("/img/products/")
-      ? src.replace("/img/products/", "/media/products/")
-      : src,
-  );
+  // ── NO SE REESCRIBE LA RUTA DE LA IMAGEN ──────────────────────
+  // Aquí antes se cambiaba "/img/products/…" por "/media/products/…"
+  // dando por hecho que el segundo servía también las imágenes del
+  // catálogo. No es así, y por eso daban 404:
+  //
+  //   /img/products/…   → archivos de `public/img/products`, que trae
+  //                       el proyecto y sirve Next como estáticos.
+  //   /media/products/… → SÓLO las que sube el administrador, que
+  //                       viven en `var/uploads` fuera de `public`.
+  //
+  // Son dos orígenes distintos. La ruta que llega ya es la correcta
+  // (la base de datos y /api/uploads guardan cada una con su prefijo),
+  // así que se usa tal cual.
 
   return (
     <motion.div
@@ -59,12 +65,11 @@ export default function AnimatedImage({
           transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
         >
           <Image
-            src={imgSrc}
+            src={src}
             alt={alt}
             fill
             sizes={sizes}
             priority={priority}
-            onError={() => setImgSrc(src)}
             className={cn("object-cover", imgClassName)}
           />
         </motion.div>

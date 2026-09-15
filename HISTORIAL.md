@@ -23,6 +23,89 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-15 · Imágenes del catálogo con error 404
+
+**Commit:** pendiente · **Tipo:** 🐛 Corrección
+
+### El síntoma
+
+```
+GET /media/products/bateria.jpg 404
+⨯ The requested resource isn't a valid image for
+  /media/products/bateria.jpg received null
+```
+
+### La causa
+
+La aplicación tiene **dos orígenes distintos** de imágenes, y se estaban
+confundiendo:
+
+| Ruta | De dónde salen | Cómo se sirven |
+|---|---|---|
+| `/img/products/…` | Las que trae el proyecto, en `public/img/products` | Next, como estáticos |
+| `/media/products/…` | Las que sube el administrador, en `var/uploads` | Un handler propio que lee el disco |
+
+Están separadas a propósito: las subidas viven **fuera** de `public/` para que
+pasen por un control que comprueba su contenido real antes de entregarlas.
+
+El problema estaba en `AnimatedImage.tsx`, que reescribía toda ruta
+`/img/products/…` como `/media/products/…` antes de pintarla, dando por hecho
+que la segunda servía también el catálogo. No lo hace: allí solo hay subidas.
+Resultado, `bateria.jpg` se pedía a una carpeta donde nunca estuvo → 404, y
+Next añadía su propio aviso al recibir `null` en vez de una imagen.
+
+Había un `onError` que devolvía la ruta buena, así que **la imagen acababa
+viéndose**. Por eso pasó desapercibido: el fallo se notaba en la consola y en
+un parpadeo al cargar, no en la pantalla. Pero cada imagen se pedía dos veces,
+la primera para nada.
+
+El mismo error estaba copiado en otros dos sitios: la previsualización del
+formulario de instrumentos y las miniaturas de la galería.
+
+### El arreglo
+
+**1. No se reescriben las rutas.** Las tres reescrituras se han quitado. La
+ruta que llega ya es la correcta: la base de datos y `/api/uploads` guardan
+cada imagen con el prefijo que le toca. Al no haber 404, sobran también los
+`onError` de respaldo.
+
+**2. Red de seguridad en `/media/products/`.** Si el archivo no está entre las
+subidas, ahora se busca también en el catálogo antes de devolver 404. Esto
+cubre las instalaciones que ya tuvieran alguna ruta mal guardada en su base de
+datos por culpa del fallo anterior.
+
+Es seguro: el respaldo vuelve a pasar por `resolverRutaSegura`, que valida el
+nombre y confirma que la ruta resultante no se sale de la carpeta permitida.
+Comprobado que los intentos de path traversal siguen rechazándose.
+
+### Cómo se comprobó
+
+| Prueba | Antes | Ahora |
+|---|---|---|
+| `/media/products/bateria.jpg` | 404 | 200 · image/jpeg |
+| `/img/products/bateria.jpg` | 200 | 200 |
+| Las 8 imágenes del catálogo, por ambas rutas | mitad en 404 | todas 200 |
+| Subir → servir → listar → borrar una imagen | — | correcto |
+| `/media/products/..%2f..%2fpackage.json` | rechazado | rechazado |
+| Imagen inexistente | 404 | 404 |
+
+Repasadas `/`, `/login`, `/cuenta` y `/admin`: todas 200.
+
+### Archivos tocados
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/components/bits/AnimatedImage.tsx` | Ya no reescribe la ruta; fuera el `onError` y el estado que sobraban |
+| `src/components/admin/AdminDashboard.tsx` | Previsualización del formulario, sin reescritura |
+| `src/components/admin/GalleryManager.tsx` | Miniaturas de la galería, sin reescritura |
+| `src/app/media/products/[name]/route.ts` | Respaldo al catálogo antes de dar 404 |
+
+### Al actualizar
+
+Nada que ejecutar. Esta entrega no toca la base de datos.
+
+---
+
 ## 2026-09-15 · El login fallaba tras actualizar (migración sin aplicar)
 
 **Commit:** pendiente · **Tipo:** 🐛 Corrección · ⚙️ Configuración

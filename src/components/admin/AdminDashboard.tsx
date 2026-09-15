@@ -701,20 +701,16 @@ export default function AdminDashboard({
                       <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-line bg-ink">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          // `?? ""` por el mismo motivo: si el formulario
-                          // se quedara sin imagen, el src vacío deja un
-                          // hueco pero no rompe el render.
-                          src={(form.image ?? "").replace(
-                            "/img/products/",
-                            "/media/products/",
-                          )}
-                          onError={(e) => {
-                            const el = e.currentTarget;
-                            if (!el.dataset.fallback) {
-                              el.dataset.fallback = "1";
-                              el.src = form.image;
-                            }
-                          }}
+                          // La ruta se usa TAL CUAL: `/img/products/…`
+                          // son las imágenes que trae el proyecto y
+                          // `/media/products/…` las que sube el
+                          // administrador. Cambiar una por otra, como
+                          // se hacía antes, provocaba errores 404.
+                          //
+                          // `?? ""`: si el formulario se quedara sin
+                          // imagen, el src vacío deja un hueco pero no
+                          // rompe el render.
+                          src={form.image ?? ""}
                           alt=""
                           className="h-full w-full object-cover"
                         />

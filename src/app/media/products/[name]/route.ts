@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  DIRECTORIO_PUBLICO,
   DIRECTORIO_SUBIDAS,
   detectarMimeDeArchivo,
   resolverRutaSegura,
@@ -45,14 +46,39 @@ export async function GET(_peticion: Request, { params }: Parametros) {
 
     // 2. Tipo MIME REAL, deducido del contenido del archivo.
     let tipoMime: string | null;
+    let rutaFinal = rutaArchivo;
+
     try {
-      tipoMime = await detectarMimeDeArchivo(rutaArchivo);
+      tipoMime = await detectarMimeDeArchivo(rutaFinal);
     } catch (error) {
-      // El archivo no existe: respuesta 404 normal.
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        throw noEncontrado("La imagen");
+        // ── Respaldo para rutas antiguas ──────────────────────
+        // Hubo una versión que reescribía "/img/products/x.jpg" como
+        // "/media/products/x.jpg" dando por hecho que esta ruta servía
+        // también el catálogo que viene con el proyecto. No es así:
+        // aquí sólo viven las imágenes SUBIDAS. El resultado eran 404
+        // y el aviso de Next «isn't a valid image ... received null».
+        //
+        // El origen ya está corregido, pero puede quedar alguna ruta
+        // así guardada en la base de datos de una instalación
+        // anterior. Antes de rendirnos, miramos en el catálogo.
+        //
+        // Es seguro: se vuelve a pasar por `resolverRutaSegura`, que
+        // valida el nombre y confirma que la ruta resultante sigue
+        // dentro de la carpeta permitida.
+        try {
+          rutaFinal = resolverRutaSegura(
+            path.join(DIRECTORIO_PUBLICO, "products"),
+            name,
+          );
+          tipoMime = await detectarMimeDeArchivo(rutaFinal);
+        } catch {
+          // Tampoco está en el catálogo: ahora sí, 404.
+          throw noEncontrado("La imagen");
+        }
+      } else {
+        throw error;
       }
-      throw error;
     }
 
     // 3. Si el contenido no es una imagen conocida, no lo servimos.
@@ -66,7 +92,7 @@ export async function GET(_peticion: Request, { params }: Parametros) {
     }
 
     // 4. Lectura y entrega del archivo.
-    const datos = await fs.readFile(rutaArchivo);
+    const datos = await fs.readFile(rutaFinal);
 
     return new NextResponse(new Uint8Array(datos), {
       headers: {
