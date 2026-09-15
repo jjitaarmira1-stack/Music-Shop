@@ -47,7 +47,22 @@ es idéntico al del repositorio, puedes forzarlo sin perder nada propio:
 ```powershell
 git fetch origin arena/01a0a1db-music-shop
 git reset --hard origin/arena/01a0a1db-music-shop
+git checkout -B arena/01a0a1db-music-shop --track origin/arena/01a0a1db-music-shop
 ```
+
+> **No te saltes la tercera línea.** `reset --hard` trae los archivos
+> correctos, pero te deja en la rama `master`, que no apunta a ninguna rama
+> remota. Sin ese `checkout --track`, el `git pull` del día a día fallará con
+> *«There is no tracking information for the current branch»*.
+
+Comprueba que quedó bien:
+
+```powershell
+git branch --show-current
+```
+
+Debe responder `arena/01a0a1db-music-shop`. Si responde `master`, ejecuta la
+tercera línea otra vez.
 
 > `reset --hard` descarta cambios locales en archivos **versionados**. Tu
 > `.env` y tus subidas no se ven afectados: git ni los mira.
@@ -200,3 +215,22 @@ npx drizzle-kit push
 **¿Hace falta reiniciar el servidor?**
 Next.js recarga en caliente casi todo. Reinícialo si cambiaron `.env`,
 `next.config.ts`, `src/proxy.ts`, `src/instrumentation.ts` o `globals.css`.
+
+**`git pull` dice «There is no tracking information for the current branch»**
+Estás en `master` en vez de en la rama del proyecto. Se arregla con:
+
+```powershell
+git checkout -B arena/01a0a1db-music-shop --track origin/arena/01a0a1db-music-shop
+```
+
+**Después de conectar la carpeta me sobran archivos que ya no existen**
+Git no borra archivos que nunca llegó a controlar (los que venían sueltos en
+el ZIP). Para ver cuáles sobran:
+
+```powershell
+git clean -nd
+```
+
+Muestra la lista **sin borrar nada**. Si estás conforme, bórralos con
+`git clean -fd`. Cuidado: eso sí elimina de verdad. Tu `.env` y `var/uploads`
+están protegidos porque figuran en `.gitignore`, pero revisa la lista antes.
