@@ -2,11 +2,14 @@
   "name": "nextjs-postgresql-template",
   "private": true,
   "scripts": {
+    "predev": "node scripts/comprobar-esquema.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:check": "node scripts/comprobar-esquema.mjs",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",

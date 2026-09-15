@@ -149,7 +149,36 @@ export function manejarError(error: unknown, contexto: string): NextResponse {
     );
   }
 
-  // ─── Caso 4: fallo inesperado ────────────────────────────────
+  // ─── Caso 4: la base de datos no coincide con el código ──────
+  // Código 42703 de PostgreSQL = "no existe la columna". Casi siempre
+  // significa lo mismo: se ha desplegado código nuevo sin aplicar la
+  // migración correspondiente. El mensaje por defecto ("Failed query:
+  // select id, name...") no le dice nada a nadie, así que lo
+  // traducimos a la instrucción concreta que resuelve el problema.
+  if (esErrorDeEsquema(error)) {
+    const idIncidencia = randomUUID();
+    registro.error(
+      contexto,
+      "La base de datos no tiene la estructura que espera el código. " +
+        "Falta aplicar una migración (npx drizzle-kit push).",
+      error,
+      { idIncidencia },
+    );
+
+    return respuestaError(
+      "ERROR_INTERNO",
+      CONFIG.esProduccion
+        ? "Ha ocurrido un error interno. Inténtalo de nuevo en unos instantes."
+        : // En desarrollo se dice exactamente qué hacer.
+          "La base de datos está desactualizada: le falta alguna columna " +
+            "que el código ya usa. Ejecuta «npx drizzle-kit push» para " +
+            "aplicar los cambios pendientes del esquema.",
+      undefined,
+      idIncidencia,
+    );
+  }
+
+  // ─── Caso 5: fallo inesperado ────────────────────────────────
   // Generamos un identificador único que damos al usuario y guardamos
   // en el registro: así soporte puede localizar el fallo exacto sin
   // que el usuario vea ni rastros de pila ni rutas internas.
@@ -180,4 +209,39 @@ export function respuestaLimiteExcedido(segundosEspera: number) {
     undefined,
     { "Retry-After": String(segundosEspera) },
   );
+}
+
+
+/**
+ * ¿Es este error un desajuste entre el código y el esquema de la BD?
+ *
+ * Códigos de PostgreSQL que delatan una migración sin aplicar:
+ *   42703 · no existe la columna
+ *   42P01 · no existe la tabla
+ *   42704 · no existe el objeto (tipo, índice…)
+ *
+ * El error real viene envuelto por Drizzle, así que hay que mirar
+ * también dentro de `cause`, que es donde queda el error original de
+ * `pg`.
+ */
+function esErrorDeEsquema(error: unknown): boolean {
+  const CODIGOS_ESQUEMA = ["42703", "42P01", "42704"];
+
+  // Lee la propiedad `code` de un objeto, si la tiene.
+  const leerCodigo = (valor: unknown): string | undefined => {
+    if (typeof valor !== "object" || valor === null) return undefined;
+    const codigo = (valor as { code?: unknown }).code;
+    return typeof codigo === "string" ? codigo : undefined;
+  };
+
+  // El propio error.
+  if (CODIGOS_ESQUEMA.includes(leerCodigo(error) ?? "")) return true;
+
+  // El error original que Drizzle ha envuelto.
+  if (typeof error === "object" && error !== null && "cause" in error) {
+    const causa = (error as { cause?: unknown }).cause;
+    if (CODIGOS_ESQUEMA.includes(leerCodigo(causa) ?? "")) return true;
+  }
+
+  return false;
 }

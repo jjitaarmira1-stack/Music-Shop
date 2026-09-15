@@ -23,6 +23,107 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-15 · El login fallaba tras actualizar (migración sin aplicar)
+
+**Commit:** pendiente · **Tipo:** 🐛 Corrección · ⚙️ Configuración
+
+### El síntoma
+
+Después de bajarse la entrega anterior, el inicio de sesión devolvía un error
+500 con este volcado en la consola:
+
+```
+POST /api/auth/login 500
+Error: Failed query: select "id", "name", "email", "password_hash",
+"role", "sessions_valid_from", "created_at" from "users" ...
+[cause]: error: no existe la columna «sessions_valid_from»
+```
+
+### La causa
+
+Ninguna sorpresa, pero sí un fallo de entrega por mi parte: la entrega
+anterior añadió la columna `sessions_valid_from` a la tabla `users` para poder
+cerrar las sesiones al cambiar un rol o una contraseña. Esa columna estaba en
+el código, pero **la base de datos no se había actualizado**, porque hacerlo
+requiere ejecutar `npx drizzle-kit push` a mano.
+
+El código pedía una columna que no existía y PostgreSQL respondía con el error
+42703 («no existe la columna»). Como la consulta del login es la primera que
+toca la tabla `users`, el fallo se manifestaba justo al intentar entrar.
+
+El aviso estaba escrito en el historial, pero **depender de que alguien lea una
+nota no es un mecanismo**. El arreglo va en tres capas para que no vuelva a
+ocurrir.
+
+### Capa 1 · El error ahora dice qué hacer
+
+`manejarError` reconoce los códigos de PostgreSQL que delatan un desajuste
+entre el código y la base de datos (`42703` columna inexistente, `42P01` tabla
+inexistente, `42704` objeto inexistente) y responde con una instrucción
+concreta en lugar de un volcado de SQL:
+
+> La base de datos está desactualizada: le falta alguna columna que el código
+> ya usa. Ejecuta «npx drizzle-kit push» para aplicar los cambios pendientes
+> del esquema.
+
+El error real viene envuelto por Drizzle, así que se mira también dentro de
+`cause`, que es donde queda el error original del driver.
+
+En producción se sigue devolviendo el mensaje genérico de siempre con su
+número de incidencia: el detalle solo se muestra en desarrollo.
+
+### Capa 2 · Aviso automático al arrancar
+
+Nuevo script `scripts/comprobar-esquema.mjs`, enganchado a `npm run dev`
+mediante `predev`. Antes de levantar el servidor consulta qué columnas existen
+de verdad y, si falta alguna, imprime un aviso en rojo imposible de pasar por
+alto con la orden exacta que hay que ejecutar.
+
+No detiene el arranque a propósito: solo informa. Bloquear `npm run dev` sería
+más molesto que útil, y tampoco falla si la base de datos aún no responde
+(caso típico al levantar todo con Docker).
+
+Cuando se añada una columna nueva al esquema, se apunta en la lista
+`COLUMNAS_ESPERADAS` del script.
+
+### Capa 3 · Atajos en package.json
+
+| Orden | Qué hace |
+|---|---|
+| `npm run db:check` | Comprueba si falta alguna columna |
+| `npm run db:push` | Aplica los cambios del esquema |
+
+### Qué tienes que hacer al bajarte esta entrega
+
+```
+npm run db:push
+```
+
+Es seguro: la columna tiene valor por defecto, no se pierde ningún dato y
+nadie pierde su sesión.
+
+### Cómo se comprobó
+
+1. Se borró la columna de la base de datos local para reproducir el fallo
+   exacto: login → 500 con el volcado de SQL. Reproducido.
+2. Con la capa 1 aplicada, el mismo fallo devuelve ya el mensaje que explica
+   la solución.
+3. `npm run db:check` detecta la columna que falta y la nombra.
+4. Tras `npm run db:push`, el login responde 200 y el comprobador dice que la
+   base de datos está al día.
+5. Repasadas las rutas `/`, `/login`, `/cuenta`, `/admin` y las APIs de
+   productos, sesión, cuentas y salud: todas 200.
+
+### Archivos tocados
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/lib/errores.ts` | Detecta errores de esquema y responde con la instrucción concreta |
+| `scripts/comprobar-esquema.mjs` | **Nuevo.** Aviso al arrancar si falta alguna columna |
+| `package.json` | `predev`, `db:check` y `db:push` |
+
+---
+
 ## 2026-09-15 · Gráficas en el panel y gestión de cuentas
 
 **Commit:** pendiente · **Tipo:** 🎯 Uso · 🔒 Seguridad
