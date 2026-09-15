@@ -25,6 +25,22 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
  *
  * @returns `true` si procede desactivar las animaciones.
  */
+/*
+  AVISO: este hook NO SE USA actualmente en ningún componente.
+
+  Se conserva a propósito. El propietario decidió que las animaciones
+  se vean siempre igual, tenga el visitante activada o no la opción
+  "reducir movimiento" de su sistema operativo.
+
+  Si algún día se quiere respetar esa preferencia, el hook ya está
+  listo y probado: basta con volver a consultarlo desde `Providers.tsx`
+  (desplazamiento suave) y `CountUp.tsx` (contadores), y restaurar el
+  bloque @media que quedó documentado en `globals.css`.
+
+  Se deja aquí en lugar de borrarlo porque volver a escribirlo bien
+  -- con `useSyncExternalStore`, sin parpadeo ni avisos de hidratación --
+  cuesta bastante más que mantener treinta líneas sin uso.
+*/
 export function useMovimientoReducido(): boolean {
   // `useSyncExternalStore` es el hook pensado exactamente para esto:
   // leer un dato que vive FUERA de React (aquí, una preferencia del

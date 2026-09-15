@@ -15,12 +15,20 @@ de animación artesanal inspirado en el catálogo de **reactbits.dev**.
 
 Todo el branding vive en **`src/lib/business.ts`**: nombre, sufijo del logo,
 eslogan, descripción SEO, contacto, redes, titulares de cada sección,
-estadísticas, ventajas del pie de página, prefijo de pedidos y cuentas demo.
+estadísticas, ventajas del pie de página y prefijo de pedidos.
 Edítalo y ejecuta `npm run build && npm run start`.
 
-> Si cambias las `demoAccounts` **después** de haber arrancado una vez, la base
-> ya tendrá los usuarios antiguos: bórralos con
-> `DELETE FROM users;` y el auto-seed recreará los nuevos.
+> Las antiguas `demoAccounts` (que publicaban un `admin`/`admin` a la vista de
+> cualquiera) se eliminaron en la auditoría de seguridad. Ver
+> [`HISTORIAL.md`](./HISTORIAL.md).
+
+## Documentación
+
+| Documento | Contenido |
+|---|---|
+| [`HISTORIAL.md`](./HISTORIAL.md) | Registro cronológico de cada mejora: qué cambió, por qué y qué riesgos quedan |
+| [`docs/AUDITORIA.md`](./docs/AUDITORIA.md) | Diagnóstico inicial: problemas clasificados por gravedad |
+| [`docs/INFORME-FINAL.md`](./docs/INFORME-FINAL.md) | Informe de la intervención, secciones A–J |
 
 ## Stack
 
@@ -43,15 +51,36 @@ npx drizzle-kit push        # crea las tablas
 npm run dev                 # http://localhost:3000
 ```
 
-La base se **auto-siembra** en la primera petición (8 instrumentos + 2 cuentas
-demo). No necesitas ejecutar seeds manualmente.
+La base se **siembra al arrancar** el servidor (8 instrumentos + la cuenta de
+administración). No necesitas ejecutar seeds manualmente.
 
-## Credenciales demo (vistas por rol)
+## Primer acceso como administrador
 
-| Rol   | Email                   | Contraseña      | Acceso                             |
-| ----- | ----------------------- | --------------- | ---------------------------------- |
-| admin | admin@nocturne.studio   | `nocturne-admin`| `/admin` (CRUD catálogo + pedidos) |
-| cliente | cliente@nocturne.studio | `nocturne-demo` | `/cuenta` (historial de pedidos)   |
+Ya **no hay credenciales escritas en el código**. Al sembrar la base por
+primera vez ocurre una de estas dos cosas:
+
+- **Si no defines `ADMIN_PASSWORD` en el `.env`**, se genera una contraseña
+  aleatoria y se imprime **una sola vez** por consola, dentro de un recuadro.
+  Cópiala en ese momento: no se vuelve a mostrar.
+- **Si la defines**, se usa esa. Es lo cómodo en desarrollo.
+
+```env
+ADMIN_EMAIL=admin@jpr.studio
+ADMIN_PASSWORD=tu-contrasena-segura
+```
+
+| Rol | Acceso |
+| --- | --- |
+| admin | `/admin` — catálogo, pedidos y galería |
+| cliente | `/cuenta` — historial de pedidos propios |
+
+Para crear una cuenta de cliente, regístrate desde la web: toda cuenta nueva
+nace con rol `customer`, y el campo `role` del formulario se ignora (se
+intentó como ataque y quedó cerrado en la auditoría).
+
+> **¿Perdiste la contraseña de administración?** Borra el usuario con
+> `DELETE FROM users WHERE role = 'admin';` y reinicia el servidor: se
+> volverá a sembrar y a mostrar una contraseña nueva.
 
 ## Estructura del proyecto
 

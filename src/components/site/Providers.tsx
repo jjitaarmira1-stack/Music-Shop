@@ -5,20 +5,16 @@ import Lenis from "lenis";
 import { Toaster } from "sonner";
 import { CartProvider } from "@/lib/cart";
 import { SessionProvider } from "@/lib/session";
-import { useMovimientoReducido } from "@/lib/accesibilidad";
 
 /**
- * Activa el desplazamiento suave (Lenis).
+ * Activa el desplazamiento suave (Lenis) en toda la web.
  *
- * @param desactivado Si es `true`, no se inicializa. Se usa cuando el
- *   usuario ha pedido reducir el movimiento: el scroll suave es una de
- *   las animaciones que más mareo provoca a personas sensibles.
+ * Se inicializa SIEMPRE, sin consultar la preferencia "reducir
+ * movimiento" del sistema: es una decisión expresa del propietario
+ * para que la experiencia sea idéntica en todos los equipos.
  */
-function useLenis(desactivado: boolean) {
+function useLenis() {
   useEffect(() => {
-    // Respetamos la preferencia del sistema: sin scroll personalizado.
-    if (desactivado) return;
-
     const lenis = new Lenis({
       duration: 1.15,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -52,15 +48,13 @@ function useLenis(desactivado: boolean) {
       document.removeEventListener("click", onClick);
       lenis.destroy();
     };
-  }, [desactivado]);
+    // Sin dependencias: se monta una sola vez, al cargar la web.
+  }, []);
 }
 
 export default function Providers({ children }: { children: ReactNode }) {
-  // Preferencia de accesibilidad del sistema operativo.
-  const movimientoReducido = useMovimientoReducido();
-
-  // El desplazamiento suave se desactiva si el usuario lo ha pedido.
-  useLenis(movimientoReducido);
+  // Desplazamiento suave activo en todo momento.
+  useLenis();
   return (
     <SessionProvider>
       <CartProvider>

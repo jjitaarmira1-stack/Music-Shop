@@ -273,30 +273,43 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   PREFERENCIA "REDUCIR MOVIMIENTO"
+   ANIMACIONES Y LA PREFERENCIA "REDUCIR MOVIMIENTO"
 
-   Red de seguridad global. Los componentes ya consultan la
-   preferencia en JavaScript, pero esta regla cubre también las
-   animaciones puramente CSS (el grano de la imagen, transiciones
-   sueltas, `scroll-behavior`) sin tener que revisarlas una a una.
+   DECISIÓN EXPRESA DEL PROPIETARIO DEL PROYECTO:
+   las animaciones deben verse SIEMPRE igual, tenga el visitante
+   activada o no la opción "reducir movimiento" de su sistema.
 
-   No se ponen en 0s los tiempos porque algunos componentes esperan al
-   evento `transitionend`: con 0s ese evento no siempre se dispara y la
-   interfaz se quedaría bloqueada. 0,01 ms es imperceptible y sí lo
-   dispara.
+   Por eso aquí NO hay ningún bloque
+   `@media (prefers-reduced-motion: reduce)` que frene o desactive
+   animaciones. La identidad visual de la web (las cintas de texto,
+   el grano del fondo, los contadores, el desplazamiento suave) se
+   mantiene intacta en todos los equipos.
+
+   Qué implica, dicho con claridad:
+   el criterio WCAG 2.3.3 "Animación a partir de interacciones" es de
+   nivel AAA (el más exigente, no obligatorio en la mayoría de marcos
+   legales). Al ignorar esa preferencia, un visitante con trastorno
+   vestibular o migraña fotosensible verá el movimiento igualmente.
+   Es una decisión de producto consciente, no un olvido.
+
+   Cómo revertirlo si algún día se quiere respetar la preferencia:
+   basta con volver a añadir el bloque siguiente. No hace falta tocar
+   ningún componente, porque ninguno consulta ya la preferencia.
+
+     @media (prefers-reduced-motion: reduce) {
+       *:not(.animate-marquee):not(.animate-marquee *),
+       *::before,
+       *::after {
+         animation-duration: 0.01ms !important;
+         animation-iteration-count: 1 !important;
+         transition-duration: 0.01ms !important;
+         scroll-behavior: auto !important;
+       }
+       .grain::before { animation: none !important; }
+     }
+
+   Nota histórica: la versión anterior aplicaba `iteration-count: 1`
+   con el selector `*`, lo que dejaba las marquesinas congeladas Y
+   descolocadas en su fotograma final (desplazadas un -50%), y dejaba
+   los contadores en «0». De ahí vino el fallo que se reportó.
    ═══════════════════════════════════════════════════════════════ */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-
-  /* El grano animado del fondo es un parpadeo constante: se congela. */
-  .grain::before {
-    animation: none !important;
-  }
-}
