@@ -23,6 +23,119 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-15 · Preparar el despliegue en Netlify
+
+**Commit:** pendiente · **Tipo:** ⚙️ Configuración · 🐛 Corrección
+
+### El síntoma
+
+La compilación en Netlify fallaba antes de terminar:
+
+```
+DATABASE_URL: DATABASE_URL es obligatoria
+  at src/lib/env.ts
+  recopilando datos de la página /api/auth/logout
+```
+
+### La causa
+
+`src/lib/env.ts` valida las variables de entorno **en el momento de
+importarse**, y si falta alguna lanza un error. Es lo correcto al arrancar el
+servidor: mejor fallar enseguida que a mitad de la petición de un cliente.
+
+El problema es que durante `next build` Next importa cada ruta para
+analizarla, así que ese error se disparaba **mientras se compilaba**.
+
+Y compilar no necesita base de datos: son dos momentos distintos. Se compila
+en el servidor de Netlify, y la aplicación se ejecuta después, con las
+variables de producción ya puestas. Se estaba exigiendo una conexión en el
+momento equivocado.
+
+### El arreglo
+
+`env.ts` distingue ahora las dos fases mediante `NEXT_PHASE`, que Next define
+automáticamente:
+
+| Momento | Comportamiento |
+|---|---|
+| Compilando | Avisa en el registro y continúa con valores de relleno |
+| Ejecutando | Aborta si falta algo, como antes |
+
+**No se ha relajado la seguridad.** Los valores de relleno solo existen
+mientras se compila y nunca llegan a producción: en cuanto la aplicación
+arranca de verdad, la validación vuelve a ser estricta. Comprobadas las cuatro
+combinaciones (compilar sin variables, ejecutar sin variables, ejecutar con
+ellas, y con una `DATABASE_URL` malformada).
+
+### Tres problemas más que habrían roto el despliegue
+
+El error de compilación era solo el primero. Los otros tres no dan error: se
+manifiestan cuando la tienda ya está publicada, que es peor.
+
+**1. No habrías podido entrar a tu propia tienda.**
+
+En producción hay que poner `SEED_DEMO_DATA=false`, para no llenar el catálogo
+de instrumentos de ejemplo. Pero esa misma variable controlaba también la
+creación de la cuenta de administración. Resultado: base de datos sin ningún
+usuario y sin forma de acceder al panel, salvo creándolo a mano por SQL.
+
+Ahora son dos cosas separadas. El administrador se crea **siempre** que la
+tabla de usuarios esté vacía; el catálogo de ejemplo sigue siendo opcional.
+
+**2. Las imágenes subidas se perderían.**
+
+Netlify no tiene disco permanente: cada petición puede atenderla una instancia
+nueva y vacía. Una imagen subida dura unos minutos y desaparece. Es cómo
+funciona la plataforma, no un fallo del código.
+
+No se puede arreglar sin añadir un servicio externo, así que se hacen dos
+cosas: detectar el alojamiento y escribir en `/tmp` (el único sitio donde se
+puede escribir, evitando un error de permisos al subir), y avisarlo en el
+registro al arrancar. Las imágenes del catálogo que trae el proyecto sí
+funcionan siempre, porque viajan dentro del despliegue.
+
+**3. El limitador de intentos es menos estricto de lo configurado.**
+
+El contador vive en la memoria de cada instancia. Con varias activas, cada una
+lleva su propia cuenta y el límite real se multiplica. Sigue protegiendo, pero
+menos. Resolverlo exigiría Redis. Queda avisado en el registro.
+
+### Archivos tocados
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/lib/env.ts` | Distingue compilación de ejecución; detecta alojamiento efímero |
+| `src/db/seed.ts` | El administrador se crea siempre, aunque la demo esté desactivada |
+| `src/lib/almacenamiento.ts` | Usa `/tmp` donde el disco del proyecto es de sólo lectura |
+| `src/instrumentation.ts` | Avisa al arrancar de las limitaciones de la plataforma |
+| `netlify.toml` | **Nuevo.** Orden de compilación, versión de Node y plugin de Next |
+| `DESPLIEGUE.md` | **Nuevo.** Guía paso a paso |
+| `.env.example` | Avisos sobre qué cambia en alojamiento gestionado |
+
+### Cómo se comprobó
+
+1. `next build` **sin ninguna variable de entorno**, como hace Netlify: la
+   compilación termina con las 23 rutas y el aviso visible en el registro.
+2. Las cuatro combinaciones de validación, ya descritas.
+3. Arranque real con `SEED_DEMO_DATA=false`: se crea la cuenta de
+   administración y el catálogo queda vacío, que es justo lo que se quería.
+4. Login con esas credenciales → 200; `/admin` y `/api/users` → 200.
+5. La portada y `/api/products` responden bien con el catálogo vacío.
+
+### Qué tienes que hacer tú
+
+Está detallado en `DESPLIEGUE.md`. Resumen:
+
+1. Crear una base de datos PostgreSQL (Neon, Supabase o Railway; hay plan
+   gratuito). Netlify no incluye ninguna.
+2. En **Site configuration → Environment variables** añadir `DATABASE_URL`,
+   `SESSION_SECRET`, `APP_ENV=production`, `ADMIN_EMAIL` y `ADMIN_PASSWORD`.
+3. Ejecutar `npx drizzle-kit push` una vez contra esa base, para crear las
+   tablas.
+4. Desplegar.
+
+---
+
 ## 2026-09-15 · Imágenes del catálogo con error 404
 
 **Commit:** pendiente · **Tipo:** 🐛 Corrección

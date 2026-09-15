@@ -28,6 +28,22 @@ export async function register() {
     entorno: CONFIG.entornoApp,
   });
 
+  // ─── Avisos propios del alojamiento sin disco permanente ─────
+  // En Netlify y Vercel conviene dejarlo escrito en el registro del
+  // despliegue: son limitaciones de la plataforma que conviene tener
+  // presentes, y buscarlas a ciegas cuesta mucho tiempo.
+  if (CONFIG.esAlojamientoEfimero) {
+    registro.warn(
+      "arranque",
+      "Alojamiento sin disco permanente. Dos consecuencias: " +
+        "(1) las imágenes que suba el administrador NO se conservarán, " +
+        "hay que usar un servicio de objetos como Cloudinary o S3; " +
+        "(2) el limitador de intentos de acceso cuenta por instancia, " +
+        "así que el límite real se multiplica por el número de " +
+        "instancias activas. Para resolverlo haría falta Redis.",
+    );
+  }
+
   // ─── 1. Apagado ordenado ─────────────────────────────────────
   // Se registra lo primero: si el proceso recibe una señal durante el
   // arranque, igualmente cerraremos las conexiones como es debido.

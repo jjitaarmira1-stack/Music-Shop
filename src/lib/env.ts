@@ -76,6 +76,35 @@ const esquemaEntorno = z.object({
 });
 
 /**
+ * ¿Estamos DENTRO de la compilación (`next build`)?
+ *
+ * Next marca esta fase con `NEXT_PHASE`. Durante la compilación, Next
+ * importa cada ruta para analizarla, y al importarlas se ejecuta este
+ * archivo. Eso tiene una consecuencia importante:
+ *
+ *   COMPILAR NO REQUIERE BASE DE DATOS. Son dos momentos distintos:
+ *   se compila en el servidor de Netlify/Vercel, y se ejecuta después
+ *   con las variables de entorno de producción ya puestas.
+ *
+ * Antes este archivo lanzaba un error al importarse, así que la
+ * compilación fallaba con «DATABASE_URL es obligatoria» aunque la
+ * variable estuviera perfectamente configurada para la ejecución.
+ * Por eso aquí distinguimos las dos fases.
+ */
+const esFaseDeCompilacion =
+  process.env.NEXT_PHASE === "phase-production-build";
+
+/**
+ * Valores de relleno que se usan SÓLO mientras se compila.
+ * Nunca llegan a producción: en cuanto la aplicación se ejecuta de
+ * verdad, la validación vuelve a ser estricta y aborta si falta algo.
+ */
+const RELLENO_COMPILACION = {
+  DATABASE_URL: "postgresql://compilacion:compilacion@127.0.0.1:5432/compilacion",
+  SESSION_SECRET: "x".repeat(LONGITUD_MINIMA_SECRETO),
+} as const;
+
+/**
  * Ejecuta la validación sobre `process.env`.
  * Si algo falla, lanzamos un error con TODOS los problemas juntos,
  * para no obligar al programador a arreglarlos de uno en uno.
@@ -88,9 +117,40 @@ function cargarEntorno() {
     const problemas = resultado.error.issues
       .map((incidencia) => `  • ${incidencia.path.join(".")}: ${incidencia.message}`)
       .join("\n");
+
+    // ─── Durante la compilación: avisar, pero NO abortar ─────────
+    // Se deja constancia bien visible en el registro del despliegue
+    // y se sigue adelante con valores de relleno. Si la variable
+    // tampoco existe al ejecutarse, la aplicación fallará entonces
+    // con este mismo mensaje, que es el momento correcto para hacerlo.
+    if (esFaseDeCompilacion) {
+      console.warn(
+        "\n[entorno] AVISO DURANTE LA COMPILACIÓN\n" +
+          `${problemas}\n` +
+          "La compilación continúa con valores de relleno, porque compilar\n" +
+          "no necesita base de datos. PERO la aplicación NO ARRANCARÁ si\n" +
+          "estas variables no están configuradas en tu proveedor de\n" +
+          "alojamiento (Netlify: Site settings → Environment variables).\n",
+      );
+
+      // Se reintenta la validación con los valores de relleno puestos.
+      return esquemaEntorno.parse({
+        ...RELLENO_COMPILACION,
+        ...process.env,
+        // El relleno sólo cubre lo que falta de verdad.
+        DATABASE_URL:
+          process.env.DATABASE_URL || RELLENO_COMPILACION.DATABASE_URL,
+        SESSION_SECRET:
+          process.env.SESSION_SECRET || RELLENO_COMPILACION.SESSION_SECRET,
+      });
+    }
+
+    // ─── En ejecución real: sí abortamos ─────────────────────────
     throw new Error(
       `Configuración de entorno inválida:\n${problemas}\n` +
-        `Revisa tu archivo .env (usa .env.example como guía).`,
+        `Revisa tu archivo .env (usa .env.example como guía).\n` +
+        `Si estás en Netlify o Vercel, defínelas en el panel del sitio, ` +
+        `en «Environment variables», y vuelve a desplegar.`,
     );
   }
 
@@ -99,7 +159,8 @@ function cargarEntorno() {
   // ─── Regla adicional: en producción el secreto es obligatorio ──
   // Este es el fallo crítico C-2 del informe: antes existía un valor
   // por defecto en el código, y eso permitía falsificar sesiones.
-  if (esProduccion && !datos.SESSION_SECRET) {
+  // Durante la compilación no se aplica, por lo explicado arriba.
+  if (esProduccion && !esFaseDeCompilacion && !datos.SESSION_SECRET) {
     throw new Error(
       "SESSION_SECRET es obligatoria en producción. " +
         "Genera una con: node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"",
@@ -138,9 +199,27 @@ const secretoSesion: string =
  * Exponer un objeto ya procesado (en vez de `process.env` suelto) evita
  * errores de tecleo y centraliza los valores por defecto.
  */
+/**
+ * ¿Estamos en un alojamiento SIN disco permanente?
+ *
+ * Netlify y Vercel definen estas variables automáticamente. En esas
+ * plataformas el sistema de archivos es efímero: lo que se escribe
+ * desaparece, y la carpeta del proyecto es de sólo lectura.
+ *
+ * Saberlo permite dos cosas: escribir en /tmp en vez de fallar con un
+ * error de permisos, y avisar de que las imágenes subidas no van a
+ * conservarse.
+ */
+const esAlojamientoEfimero = Boolean(
+  process.env.NETLIFY || process.env.VERCEL,
+);
+
 export const CONFIG = {
   /** Cadena de conexión a PostgreSQL. */
   urlBaseDatos: entorno.DATABASE_URL,
+
+  /** `true` en Netlify, Vercel y similares (disco efímero). */
+  esAlojamientoEfimero,
 
   /** Clave con la que se firman las cookies de sesión. */
   secretoSesion,

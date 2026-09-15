@@ -226,13 +226,19 @@ async function crearAdministradorInicial(): Promise<{
  * tantas veces como haga falta sin duplicar nada.
  */
 async function sembrar(): Promise<void> {
-  // Si la siembra está desactivada, no hacemos nada.
-  if (!CONFIG.sembrarDatosDemo) {
-    registro.debug("siembra", "Siembra desactivada (SEED_DEMO_DATA=false)");
-    return;
-  }
-
   // ─── Usuarios ────────────────────────────────────────────────
+  // OJO: la cuenta de administración se crea SIEMPRE que la tabla esté
+  // vacía, incluso con SEED_DEMO_DATA=false.
+  //
+  // Antes ambas cosas dependían de la misma variable, y eso dejaba un
+  // agujero muy incómodo al desplegar en producción: se pone
+  // SEED_DEMO_DATA=false (lo correcto, para no llenar la tienda de
+  // productos de ejemplo) y el resultado era una base de datos sin
+  // ningún usuario y sin forma de entrar al panel. La única salida
+  // era crear el administrador a mano por SQL.
+  //
+  // Son dos cosas distintas: los datos de DEMOSTRACIÓN son opcionales;
+  // poder entrar a tu propia tienda, no.
   const [{ total: totalUsuarios }] = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(users);
@@ -243,6 +249,11 @@ async function sembrar(): Promise<void> {
     if (contrasenaGenerada) {
       // Se muestra UNA sola vez, por consola del servidor, nunca en el
       // navegador y nunca en el registro estructurado (que va a disco).
+      //
+      // ⚠️ En Netlify o Vercel esta consola es el registro de funciones,
+      // que es incómodo de consultar y se rota. Por eso, en esos
+      // alojamientos, lo recomendable es definir ADMIN_PASSWORD como
+      // variable de entorno y no depender de este mensaje.
       console.warn(
         "\n" +
           "═".repeat(68) + "\n" +
@@ -250,15 +261,40 @@ async function sembrar(): Promise<void> {
           `  Correo:     ${email}\n` +
           `  Contraseña: ${contrasenaGenerada}\n` +
           "  Guárdala ahora: no se volverá a mostrar.\n" +
-          "  Para fijarla tú mismo, define ADMIN_PASSWORD en el .env\n" +
+          "  Para fijarla tú mismo, define ADMIN_PASSWORD en el entorno.\n" +
           "═".repeat(68) + "\n",
       );
+
+      // Aviso extra en alojamientos donde la consola es difícil de ver.
+      if (CONFIG.esAlojamientoEfimero) {
+        registro.warn(
+          "siembra",
+          "Se ha generado una contraseña de administración aleatoria. " +
+            "Si no puedes verla en el registro de funciones, define " +
+            "ADMIN_EMAIL y ADMIN_PASSWORD en las variables de entorno " +
+            "de tu proveedor y vuelve a desplegar con la tabla de " +
+            "usuarios vacía.",
+          { email },
+        );
+      }
     } else {
       registro.info("siembra", "Administrador creado con ADMIN_PASSWORD", { email });
     }
   }
 
-  // ─── Catálogo ────────────────────────────────────────────────
+  // ─── Catálogo de demostración ────────────────────────────────
+  // Esto SÍ es opcional: son los instrumentos de ejemplo. En una
+  // tienda real no se quieren, y por eso se desactivan con
+  // SEED_DEMO_DATA=false.
+  if (!CONFIG.sembrarDatosDemo) {
+    registro.info(
+      "siembra",
+      "Catálogo de demostración desactivado (SEED_DEMO_DATA=false). " +
+        "Añade tus instrumentos desde el panel de administración.",
+    );
+    return;
+  }
+
   const [{ total: totalProductos }] = await db
     .select({ total: sql<number>`count(*)::int` })
     .from(products);

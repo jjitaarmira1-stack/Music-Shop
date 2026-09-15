@@ -1,0 +1,68 @@
+# ═══════════════════════════════════════════════════════════════
+#  CONFIGURACIÓN DE NETLIFY
+#
+#  Este archivo le dice a Netlify cómo compilar y servir la tienda.
+#  Sin él, Netlify intenta adivinarlo y no siempre acierta con una
+#  aplicación de Next.js que necesita servidor.
+# ═══════════════════════════════════════════════════════════════
+
+[build]
+  # Orden que se ejecuta para compilar el sitio.
+  command = "npm run build"
+
+  # Carpeta que genera Next.js. El plugin oficial se encarga del resto.
+  publish = ".next"
+
+# El plugin oficial de Next.js para Netlify.
+# Es IMPRESCINDIBLE: esta tienda no es un sitio de archivos estáticos.
+# Necesita un servidor que ejecute las rutas de API, lea la base de
+# datos y gestione las sesiones. El plugin convierte cada ruta dinámica
+# en una función de Netlify automáticamente.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# ─── Variables disponibles durante la COMPILACIÓN ──────────────
+[build.environment]
+  # Versión de Node. Conviene fijarla para que el despliegue sea
+  # reproducible y no cambie solo cuando Netlify actualice su imagen.
+  NODE_VERSION = "20"
+
+  # No sembrar datos de demostración en producción. El catálogo real
+  # lo carga el administrador desde el panel.
+  SEED_DEMO_DATA = "false"
+
+# ═══════════════════════════════════════════════════════════════
+#  VARIABLES QUE DEBES CONFIGURAR TÚ EN EL PANEL DE NETLIFY
+#
+#  NO se escriben aquí: este archivo se sube a git y son secretos.
+#  Ve a: Site configuration → Environment variables
+#
+#    DATABASE_URL     (obligatoria)
+#      Cadena de conexión a PostgreSQL. Netlify no incluye base de
+#      datos, así que necesitas una externa: Neon, Supabase o similar.
+#      Casi todas exigen TLS, así que añade ?sslmode=require al final.
+#      Ejemplo: postgresql://usuario:clave@host.neon.tech/db?sslmode=require
+#
+#    SESSION_SECRET   (obligatoria)
+#      Clave con la que se firman las cookies de sesión. Mínimo 32
+#      caracteres. Genérala con:
+#        node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+#      Si la cambias, se cierran todas las sesiones abiertas.
+#
+#    APP_ENV          (recomendada)
+#      Ponla en "production" para que los errores no muestren detalles
+#      técnicos a los visitantes.
+#
+#    ADMIN_EMAIL / ADMIN_PASSWORD   (opcionales)
+#      Sólo se usan la primera vez, para crear la cuenta de
+#      administración inicial. Puedes borrarlas después.
+# ═══════════════════════════════════════════════════════════════
+
+# ─── Cabeceras ─────────────────────────────────────────────────
+# Las de seguridad ya las pone next.config.ts y Netlify las respeta.
+# Aquí sólo se refuerza la caché de los archivos estáticos, que llevan
+# un identificador único en el nombre y no cambian nunca.
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

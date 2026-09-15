@@ -24,9 +24,30 @@ import { registro } from "@/lib/registro"; // Registro.
  * usuario nunca deben poder servirse como estáticos sin pasar por
  * nuestro control. Se entregan mediante `/media/products/<nombre>`,
  * que fija el `Content-Type` correcto.
+ *
+ * ⚠️ AVISO IMPORTANTE EN ALOJAMIENTOS SIN DISCO PERMANENTE
+ * En Netlify, Vercel y similares, cada petición puede atenderla una
+ * instancia nueva con un disco vacío y temporal. Guardar ahí funciona
+ * durante unos minutos y luego el archivo DESAPARECE.
+ *
+ * Es una limitación de la plataforma, no un fallo del código: esos
+ * servicios no ofrecen disco permanente, a propósito. Para que las
+ * imágenes subidas persistan hay que guardarlas en un servicio de
+ * objetos (Cloudinary, S3, Supabase Storage…) o desplegar en un
+ * servidor con disco de verdad (VPS, Railway, Render).
+ *
+ * Las imágenes del catálogo que vienen con el proyecto sí funcionan
+ * siempre: viajan dentro del despliegue, en `public/img`.
  */
 export const DIRECTORIO_SUBIDAS =
-  CONFIG.directorioSubidas ?? path.join(process.cwd(), "var", "uploads");
+  CONFIG.directorioSubidas ??
+  // En alojamientos efímeros el directorio del proyecto es de sólo
+  // lectura, así que se usa /tmp, el único sitio donde se puede
+  // escribir. El contenido no sobrevive, pero al menos no falla
+  // con un error de permisos al intentar subir una imagen.
+  (CONFIG.esAlojamientoEfimero
+    ? path.join("/tmp", "musicshop-uploads")
+    : path.join(process.cwd(), "var", "uploads"));
 
 /**
  * Carpeta de las imágenes que vienen con el proyecto (el catálogo de
