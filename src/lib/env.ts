@@ -70,6 +70,11 @@ const esquemaEntorno = z.object({
     .or(z.literal("")), // toleramos la cadena vacía de la plantilla
   ADMIN_PASSWORD: z.string().optional(),
 
+  // ─── Tamaño del pool de conexiones ───────────────────────────
+  // Estaba documentada en .env.example pero no se leía: ajustarla no
+  // tenía ningún efecto. Ahora sí se aplica.
+  DB_POOL_MAX: z.coerce.number().int().positive().max(100).optional(),
+
   // ─── Parámetros del limitador de peticiones ──────────────────
   RATE_LIMIT_LOGIN_MAX: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_LOGIN_WINDOW: z.coerce.number().int().positive().default(900),
@@ -220,6 +225,22 @@ export const CONFIG = {
 
   /** `true` en Netlify, Vercel y similares (disco efímero). */
   esAlojamientoEfimero,
+
+  /**
+   * Conexiones máximas del pool.
+   *
+   * El valor por defecto depende del alojamiento:
+   *  · Servidor normal (VPS, Railway): 10. Un único proceso atiende
+   *    todas las peticiones y le conviene reutilizar conexiones.
+   *  · Netlify/Vercel: 3. Aquí cada petición puede caer en una
+   *    instancia distinta, y todas abren su propio pool. Con 10 por
+   *    instancia se agotan las conexiones de la base de datos en
+   *    cuanto hay algo de tráfico. Además Neon ya agrupa conexiones
+   *    por su cuenta si se usa la cadena «-pooler», así que poner
+   *    otro pool grande encima es contraproducente.
+   */
+  maxConexionesPool:
+    entorno.DB_POOL_MAX ?? (esAlojamientoEfimero ? 3 : 10),
 
   /** Clave con la que se firman las cookies de sesión. */
   secretoSesion,

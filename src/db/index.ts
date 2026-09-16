@@ -21,6 +21,35 @@ const almacenGlobal = globalThis as typeof globalThis & {
 };
 
 /**
+ * ¿Hay que cifrar la conexión con este servidor?
+ *
+ * @param url Cadena de conexión.
+ * @returns `true` si el servidor es remoto o la cadena pide TLS.
+ */
+function necesitaTLS(url: string): boolean {
+  // Si la cadena lo dice explícitamente, se respeta.
+  if (url.includes("sslmode=require")) return true;
+  if (url.includes("sslmode=disable")) return false;
+
+  try {
+    const servidor = new URL(url).hostname;
+
+    // Los servidores locales no usan cifrado: no hay red que espiar.
+    const esLocal =
+      servidor === "localhost" ||
+      servidor === "127.0.0.1" ||
+      servidor === "::1" ||
+      servidor.endsWith(".local");
+
+    // Cualquier otro servidor está al otro lado de internet: se cifra.
+    return !esLocal;
+  } catch {
+    // Cadena rara: por precaución, se cifra.
+    return true;
+  }
+}
+
+/**
  * Crea el pool de conexiones con parámetros pensados para producción.
  */
 function crearPool(): Pool {
@@ -29,12 +58,15 @@ function crearPool(): Pool {
     connectionString: CONFIG.urlBaseDatos,
 
     // ─── Tamaño del pool ───────────────────────────────────────
-    // Máximo de conexiones simultáneas. PostgreSQL admite 100 por
-    // defecto; dejamos margen para migraciones y otras herramientas.
-    max: 10,
+    // Configurable con DB_POOL_MAX. Por defecto 10 en un servidor
+    // normal y 3 en Netlify/Vercel, donde cada instancia abre su
+    // propio pool y se agotarían las conexiones (ver lib/env.ts).
+    max: CONFIG.maxConexionesPool,
     // Mínimo de conexiones en reserva: evita el coste de reconectar
-    // continuamente cuando el tráfico es bajo.
-    min: 1,
+    // continuamente cuando el tráfico es bajo. En alojamiento
+    // efímero se deja en 0: mantener una conexión abierta en una
+    // instancia que va a morir en segundos sólo gasta un hueco.
+    min: CONFIG.esAlojamientoEfimero ? 0 : 1,
 
     // ─── Tiempos de espera ─────────────────────────────────────
     // Cierra las conexiones que lleven 30 s sin usarse.
@@ -49,11 +81,22 @@ function crearPool(): Pool {
     query_timeout: 30_000,
 
     // ─── TLS ───────────────────────────────────────────────────
-    // En producción, la mayoría de proveedores gestionados (Neon,
-    // Supabase, RDS) exigen TLS. `rejectUnauthorized: false` acepta
-    // sus certificados intermedios, que es lo habitual en este tipo
-    // de servicios. En local no se usa cifrado.
-    ssl: CONFIG.esProduccion ? { rejectUnauthorized: false } : undefined,
+    // Se decide por la CADENA DE CONEXIÓN, no por NODE_ENV.
+    //
+    // Antes dependía de `esProduccion`, y eso fallaba en un caso muy
+    // normal: conectarse desde tu ordenador a una base de datos en la
+    // nube (por ejemplo para sembrarla o revisarla). Como en local
+    // NODE_ENV no es "production", el cifrado quedaba desactivado y
+    // Neon o Supabase rechazaban la conexión.
+    //
+    // Ahora se activa si la cadena lo pide (`sslmode=require`) o si el
+    // servidor no es local. Un PostgreSQL en tu máquina sigue sin
+    // cifrado, que es lo correcto.
+    ssl: necesitaTLS(CONFIG.urlBaseDatos)
+      ? // `rejectUnauthorized: false` acepta los certificados
+        // intermedios que usan estos servicios gestionados.
+        { rejectUnauthorized: false }
+      : undefined,
   });
 
   /**

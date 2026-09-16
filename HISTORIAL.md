@@ -23,6 +23,86 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-15 · Conexión con Neon: guía y dos arreglos
+
+**Commit:** pendiente · **Tipo:** 📄 Documentación · 🐛 Corrección
+
+### Qué se pidió
+
+Explicar paso a paso cómo conectar una base de datos de Neon con la tienda.
+
+Al preparar la guía aparecieron dos fallos del código que habrían hecho
+fracasar la conexión, así que se arreglan también.
+
+### Arreglo 1 · El cifrado dependía de NODE_ENV
+
+El pool activaba TLS solo si `NODE_ENV` era `production`:
+
+```ts
+ssl: CONFIG.esProduccion ? { rejectUnauthorized: false } : undefined
+```
+
+Eso falla en un caso muy normal: conectarse **desde tu ordenador** a la base
+de datos en la nube, que es justo lo que hay que hacer para crear las tablas
+(`npx drizzle-kit push`). En local `NODE_ENV` no es `production`, así que el
+cifrado quedaba desactivado y Neon rechazaba la conexión.
+
+Ahora se decide por la **cadena de conexión**, que es de donde viene la
+información correcta: se cifra si la cadena lleva `sslmode=require` o si el
+servidor no es local. Un PostgreSQL en tu propia máquina sigue sin cifrado.
+
+Comprobado con cinco cadenas distintas (local, Neon con y sin `-pooler`,
+Supabase y local con `sslmode=disable`): las cinco aciertan.
+
+### Arreglo 2 · DB_POOL_MAX era una variable fantasma
+
+Estaba documentada en `.env.example` pero **el código nunca la leía**: el
+tamaño del pool estaba fijado a 10 y ajustarla no servía de nada.
+
+Ahora se lee, y además el valor por defecto se adapta al alojamiento:
+
+| Dónde | Conexiones | Por qué |
+|---|---|---|
+| Servidor normal (VPS, Railway) | 10 | Un solo proceso reutiliza conexiones |
+| Netlify / Vercel | 3 | Cada instancia abre su propio pool |
+
+En alojamiento efímero, además, el mínimo baja a 0: mantener una conexión
+abierta en una instancia que va a morir en segundos solo ocupa un hueco.
+
+Sin este ajuste, con algo de tráfico en Netlify se agotarían las conexiones
+disponibles de la base de datos.
+
+### Lo que hay que saber de Neon
+
+**Neon da dos cadenas de conexión para la misma base, y cada una sirve para
+una cosa distinta.** Confundirlas es el error más común:
+
+| Cadena | Se distingue por | Para qué |
+|---|---|---|
+| Agrupada | Lleva `-pooler` | La tienda funcionando (va en Netlify) |
+| Directa | No lleva `-pooler` | Crear las tablas con `drizzle-kit push` |
+
+Usar la agrupada para crear tablas falla con errores que no mencionan el
+motivo real, del tipo `prepared statement "s1" already exists`.
+
+### Archivos tocados
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/db/index.ts` | TLS según la cadena, no según NODE_ENV; pool configurable |
+| `src/lib/env.ts` | `DB_POOL_MAX` ya se lee, con valor por defecto según el alojamiento |
+| `NEON.md` | **Nuevo.** Guía paso a paso |
+
+### Cómo se comprobó
+
+1. Cinco cadenas de conexión distintas: el cifrado se activa donde debe.
+2. Cuatro escenarios de alojamiento: el pool se dimensiona correctamente.
+3. La aplicación local sigue funcionando: portada, login y panel en 200, y
+   `/api/health` informa de la base activa sin cifrado, que es lo correcto
+   contra un PostgreSQL local.
+
+---
+
 ## 2026-09-15 · Preparar el despliegue en Netlify
 
 **Commit:** pendiente · **Tipo:** ⚙️ Configuración · 🐛 Corrección
