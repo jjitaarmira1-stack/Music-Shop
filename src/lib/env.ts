@@ -21,29 +21,72 @@ const esProduccion = process.env.NODE_ENV === "production";
  * Esquema de validación de todas las variables de entorno del servidor.
  * Cada campo lleva su regla y su mensaje de error en español.
  */
+/**
+ * Limpia un valor copiado a mano desde el panel de un proveedor.
+ *
+ * Es sorprendentemente fácil que se cuelen caracteres de más al pegar
+ * una cadena de conexión, y el error que provocan no menciona la causa
+ * («debe empezar por postgres://» cuando a simple vista sí empieza).
+ * Se corrigen aquí en lugar de hacer perder media hora a nadie:
+ *
+ *   · espacios y saltos de línea al principio o al final,
+ *   · comillas simples o dobles envolviendo el valor,
+ *   · un punto y coma final (típico al copiar de un ejemplo SQL).
+ *
+ * Lo que NO se toca: el contenido real de la cadena. Si está mal
+ * escrita de verdad, se sigue rechazando.
+ */
+function limpiarValor(valor: unknown): unknown {
+  if (typeof valor !== "string") return valor;
+
+  let limpio = valor.trim(); // Espacios y saltos de línea.
+
+  // Comillas envolviendo todo el valor: "postgresql://..." o '...'
+  const entrecomillado =
+    (limpio.startsWith('"') && limpio.endsWith('"')) ||
+    (limpio.startsWith("'") && limpio.endsWith("'"));
+  if (entrecomillado && limpio.length >= 2) {
+    limpio = limpio.slice(1, -1).trim();
+  }
+
+  // Punto y coma final.
+  if (limpio.endsWith(";")) limpio = limpio.slice(0, -1).trim();
+
+  return limpio;
+}
+
 const esquemaEntorno = z.object({
   // ─── Conexión a la base de datos (obligatoria siempre) ───────
-  DATABASE_URL: z
-    .string({ message: "DATABASE_URL es obligatoria" })
-    .min(1, "DATABASE_URL no puede estar vacía")
-    // Aceptamos los dos prefijos habituales de PostgreSQL.
-    .refine(
-      (valor) =>
-        valor.startsWith("postgres://") || valor.startsWith("postgresql://"),
-      "DATABASE_URL debe empezar por postgres:// o postgresql://",
-    ),
+  // Se limpia ANTES de validar (`preprocess`): así una cadena correcta
+  // pegada con comillas o con un espacio delante funciona, en lugar de
+  // tumbar el despliegue con un mensaje que no señala la causa real.
+  DATABASE_URL: z.preprocess(
+    limpiarValor,
+    z
+      .string({ message: "DATABASE_URL es obligatoria" })
+      .min(1, "DATABASE_URL no puede estar vacía")
+      // Aceptamos los dos prefijos habituales de PostgreSQL.
+      .refine(
+        (valor) =>
+          valor.startsWith("postgres://") || valor.startsWith("postgresql://"),
+        "DATABASE_URL debe empezar por postgres:// o postgresql://",
+      ),
+  ),
 
   // ─── Clave de firma de sesiones ──────────────────────────────
   // En producción es OBLIGATORIA y con longitud mínima: nunca se
   // permite un valor por defecto escrito en el código fuente.
-  SESSION_SECRET: z
-    .string()
-    .min(
-      LONGITUD_MINIMA_SECRETO,
-      `SESSION_SECRET debe tener al menos ${LONGITUD_MINIMA_SECRETO} caracteres`,
-    )
-    // En desarrollo permitimos omitirla para no estorbar al programar.
-    .optional(),
+  SESSION_SECRET: z.preprocess(
+    limpiarValor,
+    z
+      .string()
+      .min(
+        LONGITUD_MINIMA_SECRETO,
+        `SESSION_SECRET debe tener al menos ${LONGITUD_MINIMA_SECRETO} caracteres`,
+      )
+      // En desarrollo permitimos omitirla para no estorbar al programar.
+      .optional(),
+  ),
 
   // ─── Entorno lógico de la aplicación ─────────────────────────
   // Permite distinguir "staging" de "production", cosa que NODE_ENV no hace.
@@ -138,16 +181,44 @@ function cargarEntorno() {
           "alojamiento (Netlify: Site settings → Environment variables).\n",
       );
 
-      // Se reintenta la validación con los valores de relleno puestos.
-      return esquemaEntorno.parse({
-        ...RELLENO_COMPILACION,
-        ...process.env,
-        // El relleno sólo cubre lo que falta de verdad.
-        DATABASE_URL:
-          process.env.DATABASE_URL || RELLENO_COMPILACION.DATABASE_URL,
-        SESSION_SECRET:
-          process.env.SESSION_SECRET || RELLENO_COMPILACION.SESSION_SECRET,
-      });
+      // ─── Segundo intento con valores de relleno ────────────────
+      // OJO con un detalle que ya falló una vez: no basta con
+      // sustituir lo que FALTA (`valor || relleno`). Si la variable
+      // existe pero es INVÁLIDA —por ejemplo una DATABASE_URL copiada
+      // con comillas—, `||` la conserva, la validación vuelve a
+      // fallar y la compilación se cae igualmente.
+      //
+      // Aquí se descarta cualquier valor que no pase la validación,
+      // sea porque falta o porque está mal escrito.
+      const entradaSegura: Record<string, unknown> = { ...process.env };
+
+      for (const incidencia of resultado.error.issues) {
+        const campo = String(incidencia.path[0]);
+        // Si tenemos relleno para ese campo, se usa.
+        if (campo in RELLENO_COMPILACION) {
+          entradaSegura[campo] =
+            RELLENO_COMPILACION[campo as keyof typeof RELLENO_COMPILACION];
+        } else {
+          // Sin relleno definido: se quita para que actúe el valor
+          // por defecto del esquema, si lo tiene.
+          delete entradaSegura[campo];
+        }
+      }
+
+      const segundoIntento = esquemaEntorno.safeParse(entradaSegura);
+
+      // Si aun así falla, la compilación NO debe caerse: se avisa y se
+      // devuelve la configuración mínima viable. Compilar nunca puede
+      // depender de que las variables de producción sean correctas.
+      if (!segundoIntento.success) {
+        console.warn(
+          "[entorno] No se pudo normalizar el entorno de compilación. " +
+            "Se continúa con la configuración mínima.",
+        );
+        return esquemaEntorno.parse({ ...RELLENO_COMPILACION });
+      }
+
+      return segundoIntento.data;
     }
 
     // ─── En ejecución real: sí abortamos ─────────────────────────

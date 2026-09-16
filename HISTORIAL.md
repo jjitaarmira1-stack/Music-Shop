@@ -23,6 +23,81 @@ bucear en el historial de git.
 
 ---
 
+## 2026-09-16 · El build caía con una DATABASE_URL mal copiada
+
+**Commit:** pendiente · **Tipo:** 🐛 Corrección
+
+### El síntoma
+
+```
+• DATABASE_URL: DATABASE_URL debe empezar por postgres:// o postgresql://
+La compilación continúa con valores de relleno...
+Error: Failed to collect configuration for /api/auth/logout
+  at src/lib/env.ts:142
+Build failed
+```
+
+Llamativo: el aviso decía «la compilación continúa» y acto seguido se caía.
+
+### Dos causas a la vez
+
+**1. Un fallo mío en la red de seguridad.** La entrega anterior hizo que
+compilar no necesitara base de datos, pero el relleno estaba escrito así:
+
+```ts
+DATABASE_URL: process.env.DATABASE_URL || RELLENO.DATABASE_URL
+```
+
+`||` solo sustituye cuando el valor **falta**. Si existe pero es **inválido**,
+lo conserva, y el `.parse()` siguiente —sin `safe`— lanzaba la excepción que
+tumbaba el build. Cubrí el caso «no está» y olvidé el caso «está mal».
+
+Ahora se descarta cualquier campo que no pase la validación, falte o esté mal
+escrito, y si aun así fallara se recurre a la configuración mínima. Compilar
+no puede depender de que las variables de producción sean correctas.
+
+**2. El valor estaba mal copiado** en el panel de Netlify: la cadena llevaba
+comillas alrededor. En un archivo `.env` las comillas se admiten, pero en el
+panel de un proveedor el valor se toma literal, comillas incluidas, y entonces
+no empieza por `postgresql://` aunque a simple vista lo parezca.
+
+### El arreglo
+
+Además de corregir el fallo, ahora las variables se **limpian antes de
+validarse**: se quitan espacios, saltos de línea, comillas envolventes y un
+punto y coma final. Son los cuatro accidentes típicos al pegar una cadena, y
+el error que provocan no menciona la causa real, así que cuesta mucho verlo.
+
+Lo que **no** se toca es el contenido: una cadena mal escrita de verdad (por
+ejemplo `mysql://`) se sigue rechazando.
+
+### Comprobado
+
+| Caso | Antes | Ahora |
+|---|---|---|
+| `"postgresql://..."` con comillas | ✗ build caía | ✔ se limpia y compila |
+| Espacio o salto de línea delante | ✗ build caía | ✔ se limpia y compila |
+| `psql://` mal escrito | ✗ build caía | ✔ avisa y compila |
+| Comillas simples, punto y coma final | ✗ | ✔ se limpian |
+| `mysql://` (inválida de verdad) | — | ✔ rechazada, como debe |
+| Vacía o ausente | ✔ | ✔ |
+
+Verificado con `next build` real usando la cadena entrecomillada: compila sin
+un solo aviso. Con una irrecuperable, avisa pero ya no se cae.
+
+### Archivos tocados
+
+| Archivo | Qué cambió |
+|---|---|
+| `src/lib/env.ts` | El relleno cubre también valores inválidos; limpieza previa de las variables |
+
+### Nota sobre el panel de Netlify
+
+Al pegar valores en **Environment variables** no hay que poner comillas: el
+valor se guarda tal cual se escribe. Es distinto de un archivo `.env`.
+
+---
+
 ## 2026-09-15 · Conexión con Neon: guía y dos arreglos
 
 **Commit:** pendiente · **Tipo:** 📄 Documentación · 🐛 Corrección
